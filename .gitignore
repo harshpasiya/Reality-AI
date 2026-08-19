@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# Reference docs — local only, not for the repo
+Reality-AI-AGENTS.md
+Reality-AI-Full-Roadmap-Harsh-AI-RAG.docx
+
 # Python
 __pycache__/
 *.py[cod]
