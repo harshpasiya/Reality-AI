@@ -1,0 +1,31 @@
+# Reality AI — AI/RAG Track Dependencies
+# Python 3.11+
+# Install: pip install -r requirements.txt
+
+# --- Embeddings ---
+sentence-transformers
+
+# --- RAG / Vector Search ---
+pgvector
+psycopg2-binary
+sqlalchemy
+
+# --- Fine-tuning (LoRA/QLoRA) ---
+torch
+transformers
+peft
+bitsandbytes
+trl
+accelerate
+datasets
+
+# --- Inference ---
+# (loaded via transformers + peft above)
+
+# --- Amenities ---
+requests
+
+# --- Utilities ---
+python-dotenv
+huggingface-hub
+numpy

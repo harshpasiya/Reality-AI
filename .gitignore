@@ -1,0 +1,35 @@
+# Environment variables — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+venv-ai/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model weights & adapters (too large for git)
+*.bin
+*.safetensors
+*.pt
+*.ckpt
+ai/finetune/output/
+ai/finetune/checkpoints/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
