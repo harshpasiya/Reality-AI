@@ -29,6 +29,10 @@ build/
 *.ckpt
 ai/finetune/output/
 ai/finetune/checkpoints/
+ai/finetune/adapters/
+
+# Generated training data — reproducible via prepare_dataset.py, don't bloat the repo
+ai/finetune/data/*.jsonl
 
 # IDE
 .idea/
