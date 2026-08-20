@@ -1,31 +1,79 @@
 # Reality AI — AI/RAG Track Dependencies
 # Python 3.11+
-# Install: pip install -r requirements.txt
+# Install:  python -m venv venv-ai && venv-ai\Scripts\activate && pip install -r requirements.txt
 
-# --- Embeddings ---
-sentence-transformers
+# ──────────────────────────────────────────────────────────────────────
+# Embeddings — sentence-level encoding for semantic search (pgvector)
+# ──────────────────────────────────────────────────────────────────────
+sentence-transformers>=3.0,<4.0
 
-# --- RAG / Vector Search ---
-pgvector
-psycopg2-binary
-sqlalchemy
+# ──────────────────────────────────────────────────────────────────────
+# Deep learning runtime — required by sentence-transformers, PEFT, trl
+# ──────────────────────────────────────────────────────────────────────
+torch>=2.2,<3.0
 
-# --- Fine-tuning (LoRA/QLoRA) ---
-torch
-transformers
-peft
-bitsandbytes
-trl
-accelerate
-datasets
+# ──────────────────────────────────────────────────────────────────────
+# HuggingFace Transformers — tokenizers, model loading, generation
+# ──────────────────────────────────────────────────────────────────────
+transformers>=4.40,<5.0
 
-# --- Inference ---
-# (loaded via transformers + peft above)
+# ──────────────────────────────────────────────────────────────────────
+# PEFT — Parameter-Efficient Fine-Tuning (LoRA adapter creation/loading)
+# ──────────────────────────────────────────────────────────────────────
+peft>=0.11,<1.0
 
-# --- Amenities ---
-requests
+# ──────────────────────────────────────────────────────────────────────
+# bitsandbytes — 4-bit / 8-bit quantisation for fitting large models in
+#   limited VRAM (RTX 3050 4GB debug, Kaggle T4 16GB full runs)
+# ──────────────────────────────────────────────────────────────────────
+bitsandbytes>=0.43,<1.0
 
-# --- Utilities ---
-python-dotenv
-huggingface-hub
-numpy
+# ──────────────────────────────────────────────────────────────────────
+# trl — Supervised Fine-Tuning Trainer (SFTTrainer) for LoRA training
+# ──────────────────────────────────────────────────────────────────────
+trl>=0.9,<1.0
+
+# ──────────────────────────────────────────────────────────────────────
+# datasets — loading and processing the synthetic conversation dataset
+# ──────────────────────────────────────────────────────────────────────
+datasets>=2.19,<3.0
+
+# ──────────────────────────────────────────────────────────────────────
+# accelerate — distributed/mixed-precision training utilities for PEFT
+# ──────────────────────────────────────────────────────────────────────
+accelerate>=0.30,<1.0
+
+# ──────────────────────────────────────────────────────────────────────
+# Database — SQLAlchemy ORM + PostGIS geometry + pgvector embeddings
+#   Shared with Person 2's backend; same DB connection, same schema.
+# ──────────────────────────────────────────────────────────────────────
+sqlalchemy>=2.0,<3.0
+geoalchemy2>=0.15,<1.0
+psycopg2-binary>=2.9,<3.0
+pgvector>=0.3,<1.0
+
+# ──────────────────────────────────────────────────────────────────────
+# HTTP client — Google Places Nearby Search API (amenities enrichment)
+#   Called once at listing-creation time, never live during chat/search.
+# ──────────────────────────────────────────────────────────────────────
+requests>=2.31,<3.0
+
+# ──────────────────────────────────────────────────────────────────────
+# Config — loads .env file (HF_TOKEN, DATABASE_URL, API keys)
+# ──────────────────────────────────────────────────────────────────────
+python-dotenv>=1.0,<2.0
+
+# ──────────────────────────────────────────────────────────────────────
+# HuggingFace Hub — pull gated models, push LoRA adapters
+# ──────────────────────────────────────────────────────────────────────
+huggingface-hub>=0.23,<1.0
+
+# ──────────────────────────────────────────────────────────────────────
+# Utilities
+# ──────────────────────────────────────────────────────────────────────
+numpy>=1.26,<3.0
+
+# ──────────────────────────────────────────────────────────────────────
+# Testing
+# ──────────────────────────────────────────────────────────────────────
+pytest>=8.0,<9.0
