@@ -206,14 +206,14 @@ def main() -> None:
     flat_count = sum(1 for l in listings if l["property_type"] == "flat")
     land_count = len(listings) - flat_count
 
-    print(f"\n✅  Seeded {len(listings)} listings into '{DATABASE_URL.split('/')[-1]}':")
+    print(f"\n[OK] Seeded {len(listings)} listings into '{DATABASE_URL.split('/')[-1]}':")
     print(f"   Property types : {flat_count} flat | {land_count} house_land")
-    print(f"   Price range    : ₹{min(prices):,.0f}  –  ₹{max(prices):,.0f}")
-    print(f"   Avg price      : ₹{sum(prices)/len(prices):,.0f}")
+    print(f"   Price range    : Rs.{min(prices):,.0f}  --  Rs.{max(prices):,.0f}")
+    print(f"   Avg price      : Rs.{sum(prices)/len(prices):,.0f}")
     print(f"   Neighbourhoods : {', '.join(n['name'] for n in NEIGHBOURHOODS)}")
     print("\n   Sample titles:")
     for l in listings[:4]:
-        print(f"     • {l['title']}  (₹{float(l['price']):,.0f})")
+        print(f"     - {l['title']}  (Rs.{float(l['price']):,.0f})")
     print()
 
 
