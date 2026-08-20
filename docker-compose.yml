@@ -1,0 +1,33 @@
+# Reality AI — Local development database
+# Runs PostgreSQL 16 with PostGIS 3.4.
+# pgvector is installed via db/init.sql on first start.
+#
+# Usage:
+#   docker-compose up -d        # start in background
+#   docker-compose down         # stop (data persisted in named volume)
+#   docker-compose down -v      # stop AND delete data volume
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: reality_ai_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-reality_ai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reality_ai_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-reality_ai}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-reality_ai} -d ${POSTGRES_DB:-reality_ai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+    name: reality_ai_pg_data
