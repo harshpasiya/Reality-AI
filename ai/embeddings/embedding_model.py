@@ -61,7 +61,7 @@ class EmbeddingModel:
     Example::
 
         model = EmbeddingModel()
-        vector = model.embed("3BHK flat near Bopal, Ahmedabad")
+        vector = model.embed("3BHK flat near Adajan, Surat")
         vectors = model.embed_batch(["flat in Bopal", "house in Thaltej"])
     """
 
@@ -99,9 +99,21 @@ class EmbeddingModel:
 
         self.model_name: str = model_name
         self.device: str = resolved_device
-        # get_embedding_dimension() is the current API name;
-        # get_sentence_embedding_dimension() was renamed and emits a FutureWarning.
-        self.embedding_dim: int = self._model.get_embedding_dimension()
+        # Support both API names across sentence-transformers versions:
+        #   - get_sentence_embedding_dimension()  (older, still common)
+        #   - get_embedding_dimension()           (newer, renamed)
+        _dim_fn = getattr(
+            self._model,
+            "get_sentence_embedding_dimension",
+            getattr(self._model, "get_embedding_dimension", None),
+        )
+        if _dim_fn is None:
+            raise AttributeError(
+                "Cannot determine embedding dimension — SentenceTransformer "
+                "object has neither get_sentence_embedding_dimension() nor "
+                "get_embedding_dimension()."
+            )
+        self.embedding_dim: int = _dim_fn()
 
         logger.info(
             "Loaded embedding model '%s', dimension=%d, device=%s",
