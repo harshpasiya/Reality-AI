@@ -1,0 +1,81 @@
+# ==========================================================================
+# LoRA Configuration — Full Fine-Tune (Mistral-7B on Kaggle T4, 16 GB VRAM)
+# ==========================================================================
+#
+# This config is for the production fine-tuning run on Kaggle's free T4 GPU
+# (16 GB VRAM).  It pairs with the base model:  mistralai/Mistral-7B-v0.1
+# loaded in 4-bit quantisation (~5 GB), leaving ~11 GB for LoRA weights,
+# activations, optimiser states, and KV cache.
+#
+# The full dataset (~750 examples) provides enough signal to justify a
+# higher rank and broader module targeting compared to the debug config.
+# ==========================================================================
+
+# ── r (rank) ──────────────────────────────────────────────────────────────
+# With 11 GB of headroom (vs ~1.5 GB on the RTX 3050), we can afford a
+# larger rank.  r=16 roughly doubles the adapter's capacity compared to
+# the debug config (r=8), giving the model more room to learn nuanced
+# property-domain language patterns, pricing vocabulary, and the specific
+# conversational style we want.  Still modest enough that training
+# completes in ~1-2 hours on a T4 with 750 examples.
+r: 16
+
+# ── lora_alpha ────────────────────────────────────────────────────────────
+# Maintaining the standard 2x-rank convention: alpha = 32, so the
+# effective scaling (lora_alpha / r = 32 / 16 = 2.0) matches the debug
+# config.  This means hyperparameters like learning rate transfer
+# between the two configs without needing re-tuning — the update
+# magnitude per step stays consistent.
+lora_alpha: 32
+
+# ── lora_dropout ──────────────────────────────────────────────────────────
+# With 750 training examples (7.5x more than the debug set), the risk
+# of overfitting is lower, so we can reduce dropout.  0.05 (5%) still
+# provides light regularisation — enough to prevent the model from
+# memorising exact phrasing, while letting it learn the domain patterns
+# we care about.
+lora_dropout: 0.05
+
+# ── target_modules ────────────────────────────────────────────────────────
+# Mistral-7B uses SEPARATE attention projections (unlike Phi-3's fused
+# qkv_proj).  The module names in the Mistral architecture are:
+#   - q_proj : query projection
+#   - k_proj : key projection
+#   - v_proj : value projection
+#   - o_proj : output projection after attention
+#
+# We target all four attention projections.  With 16 GB of headroom we
+# could also include the MLP layers (gate_proj, up_proj, down_proj) for
+# even more capacity, but attention-only adaptation is the standard
+# starting point — it captures conversational style effectively, and
+# adding MLP layers can always be tested as a follow-up if quality is
+# insufficient.
+#
+# IMPORTANT: if you swap the base model (e.g. to Llama-3-8B), verify
+# that these module names still match.  Llama-3 uses the same names as
+# Mistral, but other architectures (Phi, Gemma, Qwen) differ.
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+
+# ── task_type ─────────────────────────────────────────────────────────────
+# CAUSAL_LM for autoregressive chat fine-tuning — same as the debug config.
+task_type: CAUSAL_LM
+
+# ── Additional training hints (consumed by the training script) ───────────
+# These are NOT LoraConfig fields — the training script reads them
+# separately to configure the Trainer.
+training:
+  per_device_train_batch_size: 2    # T4 has enough headroom for batch=2
+  gradient_accumulation_steps: 4    # effective batch = 8
+  num_train_epochs: 3
+  learning_rate: 2.0e-4
+  warmup_ratio: 0.05
+  fp16: true                        # T4 supports FP16; BF16 only on Ampere+
+  bf16: false
+  max_seq_length: 2048              # Mistral supports 8k; 2k is a good balance
+  logging_steps: 10
+  save_strategy: "epoch"
+  eval_steps: 50                    # evaluate every 50 steps if eval set present
