@@ -30,9 +30,8 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
-    TrainingArguments,
 )
-from trl import SFTTrainer
+from trl import SFTConfig, SFTTrainer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -219,7 +218,7 @@ def train(resume: bool = False) -> None:
 
     # ── 6. Training arguments ────────────────────────────────────────────
     use_bf16 = (compute_dtype == torch.bfloat16)
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=OUTPUT_DIR,
         num_train_epochs=NUM_EPOCHS,
         per_device_train_batch_size=PER_DEVICE_BATCH_SIZE,
@@ -234,8 +233,10 @@ def train(resume: bool = False) -> None:
         bf16=use_bf16,
         max_grad_norm=0.3,
         max_seq_length=MAX_SEQ_LENGTH,
-        report_to="none",           # no wandb/tensorboard for debug
-        dataloader_pin_memory=False,  # saves a bit of VRAM
+        packing=False,
+        dataset_text_field="text",
+        report_to="none",
+        dataloader_pin_memory=False,
     )
 
     # ── 7. Check for resume checkpoint ───────────────────────────────────
@@ -253,7 +254,6 @@ def train(resume: bool = False) -> None:
         processing_class=tokenizer,
         train_dataset=dataset,
         args=training_args,
-        packing=False,
     )
 
     # ── 9. Train ─────────────────────────────────────────────────────────
