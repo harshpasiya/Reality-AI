@@ -233,6 +233,7 @@ def train(resume: bool = False) -> None:
         fp16=not use_bf16,
         bf16=use_bf16,
         max_grad_norm=0.3,
+        max_seq_length=MAX_SEQ_LENGTH,
         report_to="none",           # no wandb/tensorboard for debug
         dataloader_pin_memory=False,  # saves a bit of VRAM
     )
@@ -249,11 +250,9 @@ def train(resume: bool = False) -> None:
     # ── 8. Create trainer ────────────────────────────────────────────────
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         train_dataset=dataset,
         args=training_args,
-        max_seq_length=MAX_SEQ_LENGTH,
-        dataset_text_field="text",
         packing=False,
     )
 
