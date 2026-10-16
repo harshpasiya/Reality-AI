@@ -2,7 +2,6 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   ArrowLeft,
   RefreshCw,
@@ -21,12 +20,9 @@ import {
 import { getListing, ListingResponse } from "@/lib/api/listings";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
+import PropertyImage from "@/components/PropertyImage";
 
 type ViewState = "loading" | "normal" | "error" | "not-found";
-
-// Single Dummy Property Image URL
-const DUMMY_PROPERTY_IMAGE =
-  "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80";
 
 // Mock Fallback Data
 const MOCK_AMENITIES = [
@@ -375,6 +371,8 @@ export default function PropertyDetailsPage({
   const fetchedAmenities = getAmenities(property.amenities);
   const amenitiesList =
     fetchedAmenities.length > 0 ? fetchedAmenities : MOCK_AMENITIES;
+  const propertyImages =
+    property.images?.map((image) => image.trim()).filter(Boolean) ?? [];
 
   const broker = (property as Record<string, any>).broker || {
     id: 1,
@@ -399,16 +397,28 @@ export default function PropertyDetailsPage({
             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
           </button>
 
-          {/* 6. Single Dummy Image Banner */}
-          <div className="bg-surface border-border relative h-64 w-full overflow-hidden rounded-2xl border shadow-xs sm:h-96">
-            <Image
-              src={DUMMY_PROPERTY_IMAGE}
-              alt={property.title || "Property Cover Photo"}
-              fill
-              unoptimized
-              className="object-cover"
+          <div className="space-y-3">
+            <PropertyImage
+              src={propertyImages[0]}
+              alt={`${property.title} property photo`}
+              className="h-64 w-full rounded-2xl border border-zinc-200 shadow-xs sm:h-96 dark:border-zinc-800"
+              sizes="(max-width: 640px) 100vw, 960px"
               priority
             />
+
+            {propertyImages.length > 1 && (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {propertyImages.slice(1).map((image, index) => (
+                  <PropertyImage
+                    key={`${image}-${index + 1}`}
+                    src={image}
+                    alt={`${property.title} property photo ${index + 2}`}
+                    className="aspect-video rounded-xl border border-zinc-200 shadow-xs dark:border-zinc-800"
+                    sizes="(max-width: 640px) 50vw, 240px"
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -472,6 +482,22 @@ export default function PropertyDetailsPage({
                   {property.description || "No description available."}
                 </p>
               </section>
+
+              {property.video_tour_url && (
+                <section>
+                  <h2 className="text-text-primary mb-3 text-lg font-bold tracking-tight">
+                    Virtual tour
+                  </h2>
+                  <video
+                    controls
+                    preload="metadata"
+                    className="w-full rounded-2xl border border-zinc-200 bg-black dark:border-zinc-800"
+                  >
+                    <source src={property.video_tour_url} />
+                    Your browser does not support the video player.
+                  </video>
+                </section>
+              )}
 
               {/* Broker Card */}
               <section>

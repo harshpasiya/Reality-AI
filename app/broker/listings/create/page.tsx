@@ -8,6 +8,9 @@ import {
   ListingResponse,
   CreateListingRequest,
   BackendPropertyType,
+  extractListingDetails,
+  uploadListingImage,
+  uploadListingVideo,
 } from "@/lib/api/listings";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
@@ -221,6 +224,10 @@ function toCreateListingRequest(
     lat: Number(data.lat),
 
     lng: Number(data.lng),
+
+    images: [],
+
+    video_tour_url: null,
   };
 }
 
@@ -296,6 +303,8 @@ export default function BrokerCreateListingPage() {
   const [touched, setTouched] = useState<FormTouched>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -314,26 +323,12 @@ export default function BrokerCreateListingPage() {
     setIsExtracting(true);
 
     try {
-      const response = await fetch("/api/broker/listings/extract", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ description: propertyDescription }),
-      });
-      const result: {
-        formData?: CreateListingFormData;
-        error?: string;
-      } = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.error || "Unable to understand the description.",
-        );
-      }
+      const result = await extractListingDetails(propertyDescription);
 
       if (!result.formData) {
-        throw new Error("The property details could not be extracted.");
+        throw new Error(
+          result.error || "The property details could not be extracted.",
+        );
       }
 
       setFormData({ ...INITIAL_FORM_DATA, ...result.formData });
@@ -444,7 +439,30 @@ export default function BrokerCreateListingPage() {
     setIsLoading(true);
 
     try {
-      const payload = toCreateListingRequest(formData);
+      if (
+        selectedImages.some((file) => !/\.(jpe?g|png|webp)$/i.test(file.name))
+      ) {
+        throw new Error("Property photos must be JPG, PNG, or WEBP files.");
+      }
+
+      if (selectedVideo && !/\.(mp4|webm)$/i.test(selectedVideo.name)) {
+        throw new Error("The virtual tour must be an MP4 or WEBM file.");
+      }
+
+      const images = await Promise.all(
+        selectedImages.map(async (file) => {
+          const upload = await uploadListingImage(file);
+          return upload.url;
+        }),
+      );
+      const videoTourUrl = selectedVideo
+        ? await uploadListingVideo(selectedVideo)
+        : null;
+      const payload: CreateListingRequest = {
+        ...toCreateListingRequest(formData),
+        images,
+        video_tour_url: videoTourUrl,
+      };
 
       const listing = await createListing(payload);
 
@@ -452,6 +470,8 @@ export default function BrokerCreateListingPage() {
       setIsSuccess(true);
 
       setFormData(INITIAL_FORM_DATA);
+      setSelectedImages([]);
+      setSelectedVideo(null);
       setErrors({});
       setTouched({});
       setSubmitError(null);
@@ -859,6 +879,105 @@ export default function BrokerCreateListingPage() {
                 />
               </Field>
             </div>
+
+            <section className="space-y-5 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+              <div>
+                <h2 className="text-sm font-semibold">Property media</h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Add photos and an optional virtual tour video.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="listing-images"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Property photos
+                </label>
+                <input
+                  id="listing-images"
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                  multiple
+                  disabled={isLoading}
+                  onChange={(event) => {
+                    const files = Array.from(event.currentTarget.files ?? []);
+                    setSelectedImages((previous) => [...previous, ...files]);
+                    event.currentTarget.value = "";
+                    setSubmitError(null);
+                  }}
+                  className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100 dark:text-zinc-400 dark:file:bg-blue-950/50 dark:file:text-blue-300"
+                />
+                <p className="text-xs text-zinc-500">
+                  Select one or more JPG, PNG, or WEBP images.
+                </p>
+                {selectedImages.length > 0 && (
+                  <ul className="space-y-1">
+                    {selectedImages.map((file, index) => (
+                      <li
+                        key={`${file.name}-${file.lastModified}-${index}`}
+                        className="flex items-center justify-between gap-3 rounded-md bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800"
+                      >
+                        <span className="truncate">{file.name}</span>
+                        <button
+                          type="button"
+                          disabled={isLoading}
+                          onClick={() =>
+                            setSelectedImages((previous) =>
+                              previous.filter(
+                                (_, fileIndex) => fileIndex !== index,
+                              ),
+                            )
+                          }
+                          className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50 dark:text-red-400"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="listing-video"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Virtual tour video
+                </label>
+                <input
+                  id="listing-video"
+                  type="file"
+                  accept=".mp4,.webm,video/mp4,video/webm"
+                  disabled={isLoading}
+                  onChange={(event) => {
+                    setSelectedVideo(event.currentTarget.files?.[0] ?? null);
+                    event.currentTarget.value = "";
+                    setSubmitError(null);
+                  }}
+                  className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100 dark:text-zinc-400 dark:file:bg-blue-950/50 dark:file:text-blue-300"
+                />
+                <p className="text-xs text-zinc-500">
+                  Optional. Choose one MP4 or WEBM video.
+                </p>
+                {selectedVideo && (
+                  <div className="flex items-center justify-between gap-3 rounded-md bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800">
+                    <span className="truncate">{selectedVideo.name}</span>
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => setSelectedVideo(null)}
+                      className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50 dark:text-red-400"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+            </section>
 
             <div className="flex justify-end gap-3 pt-2">
               <button

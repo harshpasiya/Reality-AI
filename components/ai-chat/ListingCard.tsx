@@ -4,6 +4,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Listing } from "@/lib/api/chat";
 import { Bed, Bath, Maximize2, MapPin } from "lucide-react";
+import PropertyImage from "@/components/PropertyImage";
 
 interface ListingCardProps {
   listing: Listing;
@@ -25,6 +26,7 @@ export default function ListingCard({
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(listing.price);
+  const imageSrc = listing.images?.find((image) => image.trim())?.trim();
 
   return (
     <Link
@@ -42,6 +44,13 @@ export default function ListingCard({
           "border-accent-border bg-accent-soft ring-accent/20 shadow-[0_10px_25px_rgba(111,99,200,0.12)] ring-2",
       )}
     >
+      <PropertyImage
+        src={imageSrc}
+        alt={`${listing.title} property photo`}
+        className="h-36 w-full rounded-xl"
+        sizes="(max-width: 640px) 100vw, 400px"
+      />
+
       <div className="flex items-start justify-between gap-2">
         <div>
           <h4 className="group-hover:text-accent line-clamp-1 text-sm leading-snug font-semibold text-slate-800 transition-colors">

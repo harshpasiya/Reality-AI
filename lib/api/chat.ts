@@ -20,6 +20,8 @@ export interface Listing {
   broker_id: number;
   amenities: Record<string, boolean>;
   created_at: string;
+  images?: string[] | null;
+  video_tour_url?: string | null;
 }
 
 export interface ChatMessageRequest {
@@ -47,9 +49,8 @@ export interface ConversationHistoryResponse {
   messages: HistoricalMessage[];
 }
 
-
 export function sendChatMessage(
-  data: ChatMessageRequest
+  data: ChatMessageRequest,
 ): Promise<ChatMessageResponse> {
   return apiClient("/chat", {
     method: "POST",
@@ -58,7 +59,7 @@ export function sendChatMessage(
 }
 
 export function getConversationHistory(
-  conversationId: string
+  conversationId: string,
 ): Promise<ConversationHistoryResponse> {
   return apiClient(`/chat/${conversationId}`, {
     method: "GET",
