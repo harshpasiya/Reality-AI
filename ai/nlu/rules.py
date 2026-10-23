@@ -240,7 +240,7 @@ def extract_keywords(query: str) -> tuple[str, ...]:
 
 _FLAT_RE = re.compile(r"\b(?:flats?|apartments?|apts?|penthouses?)\b")
 _HOUSE_LAND_RE = re.compile(
-    r"\b(?:plots?|lands?|villas?|bungalows?|row[\s-]?houses?|houses?|tenements?)\b"
+    r"\b(?:plots?|lands?|villas?|bungalows?|row[\s-]?houses?|houses?|tenements?|makaa?n)\b"
 )
 
 

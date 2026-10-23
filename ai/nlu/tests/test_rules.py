@@ -55,6 +55,7 @@ CASES: list[tuple[str, dict]] = [
     ("penthouse in athwa", {"locality": "Athwa", "property_type": "flat"}),
     ("row house in pal", {"locality": "Pal", "property_type": "house_land"}),
     ("tenement in udhna", {"locality": "Udhna", "property_type": "house_land"}),
+    ("bhatar ma makan joie che", {"locality": "Bhatar", "property_type": "house_land"}),
     ("flat with club house", {"property_type": "flat", "keywords": ("clubhouse",)}),
     # ── keywords ──
     ("flat with pool and car parking", {"property_type": "flat",

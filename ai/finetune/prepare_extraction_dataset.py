@@ -43,6 +43,7 @@ SEED = 20261023
 # ---------------------------------------------------------------------------
 P_PROPERTY = 0.85
 P_NO_FILTERS = 0.05     # property query with every filter empty ("show me homes")
+P_GENERIC = 0.03        # draw from GENERIC_PROPERTY instead of a template
 P_BHK = 0.65
 P_LOCALITY = 0.70
 P_LANDMARK = 0.25       # share of locality mentions that are landmarks
@@ -58,7 +59,9 @@ BHK_WEIGHTS = {1: 12, 2: 35, 3: 33, 4: 14, 5: 4, 6: 2}
 FLAT_WORDS = ["flat", "apartment", "penthouse"]
 FLAT_PLURALS = {"flat": "flats", "apartment": "apartments", "penthouse": "penthouses"}
 HOUSE_WORDS = ["plot", "land", "villa", "bungalow", "row house", "house", "tenement"]
-HOUSE_PLURALS = {"plot": "plots", "land": "land", "villa": "villas", "bungalow": "bungalows",
+# Hindi/Gujarati "makan" (house) — only rendered in hi/gu templates.
+HOUSE_WORDS_HI_GU = ["makan", "makaan"]
+HOUSE_PLURALS = {"makan": "makan", "makaan": "makaan", "plot": "plots", "land": "land", "villa": "villas", "bungalow": "bungalows",
                  "row house": "row houses", "house": "houses", "tenement": "tenements"}
 NEUTRAL_SINGULAR = ["property", "home", "place", "unit"]
 NEUTRAL_PLURAL = ["properties", "homes", "options", "listings"]
@@ -115,6 +118,49 @@ OFFTOPIC: dict[str, list[str]] = {
 }
 
 
+# Off-topic messages that DO mention a Surat place — the case keyword rules
+# get wrong. {place}/{place2} are filled from the gazetteer.
+OFFTOPIC_LOCAL_TEMPLATES = [
+    "best {food} restaurants in {place}", "good cafes near {place}",
+    "how far is {place} from {place2}", "how to reach {place} from {place2} by bus",
+    "weather in {place} today", "is there traffic near {place} right now",
+    "history of {place}", "petrol pump near {place}", "atm near {place}",
+    "what time does {place} market open", "where can i eat {food} near {place}",
+    "how much is an auto from {place} to {place2}", "any good gym membership offers in {place}",
+    "is {place} flooded today", "where to park my car near {place} for shopping",
+    "cheap street food in {place}", "best place to watch a movie near {place}",
+    "how crowded is {place} on sundays", "distance between {place} and {place2} in km",
+]
+OFFTOPIC_FOODS = ["vegetarian", "gujarati thali", "chinese", "south indian", "pizza", "jain",
+                  "punjabi", "locho", "khaman", "ice cream"]
+# Off-topic messages that use home/property words casually.
+OFFTOPIC_HOMEWORDS = [
+    "how do i clean my house quickly", "tips to decorate my flat for diwali",
+    "home remedies for a cold", "work from home tips", "house party game ideas",
+    "how much does a real estate broker earn", "write a poem about my home",
+    "what is the meaning of real estate", "how to make paneer at home",
+    "best indoor plants for an apartment balcony", "tell me a joke about property dealers",
+    "how to get rid of ants in the house", "what paint colour suits a small bedroom",
+    "is real estate a good career", "how to set up wifi in my flat",
+]
+# Property requests with no usable filter at all.
+GENERIC_PROPERTY = [
+    "what do you have for me", "show me what's available", "what's on offer right now",
+    "any listings?", "i'm looking to buy", "help me find a home", "what can i get",
+    "show me some options", "i want to see properties", "anything good available?",
+    "what properties are listed", "i need a place to live", "suggest something for me to buy",
+    "what are my options", "show me the latest listings", "help me pick a property",
+]
+
+
+def _local_offtopic(rng: random.Random, templates: list[str]) -> str:
+    names = list(LOCALITIES) + list(LANDMARKS)
+    place, place2 = rng.sample(names, 2)
+    return rng.choice(templates).format(
+        place=place if rng.random() < 0.6 else place.lower(),
+        place2=place2, food=rng.choice(OFFTOPIC_FOODS))
+
+
 def _gibberish(rng: random.Random) -> str:
     letters = "qwertyuiopasdfghjklzxcvbnm"
     words = ["".join(rng.choice(letters) for _ in range(rng.randint(3, 8)))
@@ -151,7 +197,7 @@ def _sample_price_value(rng: random.Random) -> dict[str, Any]:
     if style == "lakh":
         a = rng.choice(LAKH_AMOUNTS)
         n = _fmt_num(a)
-        text = rng.choice([f"{n}L", f"{n}l", f"{n} lakh", f"{n} lakhs", f"{n} lac", f"{n} lacs",
+        text = rng.choice([f"{n}L", f"{n}l", f"{n} lakh", f"{n} lakhs", f"{n} lac", f"{n} lacs", f"{n} laks", f"{n} lacks", f"{n} lakhz",
                            f"rs {n} lakh", f"Rs. {n} lakh", f"₹{n} lakh", f"{n} Lakh"])
         return {"amount": a, "unit": "lakh", "text": text}
     if style == "crore":
@@ -271,7 +317,7 @@ def sample_target(rng: random.Random, lang: str) -> dict[str, Any]:
     return t
 
 
-def _type_word(rng: random.Random, t: dict, plural: bool) -> str | None:
+def _type_word(rng: random.Random, t: dict, plural: bool, lang: str = "en") -> str | None:
     ptype = t["property_type"]
     if ptype is None:
         return None
@@ -279,6 +325,8 @@ def _type_word(rng: random.Random, t: dict, plural: bool) -> str | None:
         w = rng.choice(FLAT_WORDS)
         return FLAT_PLURALS[w] if plural else w
     words = HOUSE_WORDS if t["bhk"] is None else ["villa", "bungalow", "row house", "house", "tenement"]
+    if lang != "en" and rng.random() < 0.3:
+        words = HOUSE_WORDS_HI_GU
     w = rng.choice(words)
     return HOUSE_PLURALS[w] if plural else w
 
@@ -292,9 +340,9 @@ def _bhk_text(rng: random.Random, bhk: int) -> str:
     return rng.choice(forms)
 
 
-def render_np(rng: random.Random, t: dict, plural: bool) -> str:
+def render_np(rng: random.Random, t: dict, plural: bool, lang: str = "en") -> str:
     """Noun phrase: bhk + type word, or a neutral noun."""
-    tw = _type_word(rng, t, plural)
+    tw = _type_word(rng, t, plural, lang)
     if t["bhk"] is not None:
         bhk = _bhk_text(rng, t["bhk"])
         if bhk == "studio" and tw is None:
@@ -397,26 +445,48 @@ TEMPLATES: list[tuple[str, str, bool, str]] = [
 # ---------------------------------------------------------------------------
 # Noise
 # ---------------------------------------------------------------------------
+# Direction and negation words stay intact: a typo there could make the
+# intended meaning genuinely unclear, so the label would no longer be exact.
+# Everything else — localities, type words, keywords, units — gets typos,
+# because that's where real users misspell ("appartment", "bunglow").
 _PROTECTED = {
-    "bhk", "rk", "studio", "lakh", "lakhs", "lac", "lacs", "crore", "crores", "cr", "rs",
-    "under", "below", "above", "over", "upto", "within", "between", "and", "to", "from",
-    "max", "minimum", "least", "more", "less", "than", "budget", "starting", "onwards",
-    "tak", "se", "kam", "upar", "zyada", "sudhi", "thi", "ochhu", "vadhare", "vacche", "beech",
-    "not", "without", "near", "close", "with", *FLAT_WORDS, *FLAT_PLURALS.values(),
+    "under", "below", "above", "over", "upto", "within", "between", "from", "than",
+    "least", "more", "less", "budget", "starting", "onwards", "minimum", "maximum",
+    "tak", "kam", "upar", "zyada", "sudhi", "ochhu", "vadhare", "vacche", "beech",
+    "without", "near", "close",
+}
+_TYPE_AND_KEYWORD_WORDS = {
+    *FLAT_WORDS, *FLAT_PLURALS.values(),
     *[w for h in HOUSE_WORDS for w in h.split()], *[w for h in HOUSE_PLURALS.values() for w in h.split()],
     *[w for k in list(KEYWORD_SYNONYMS) + list(KEYWORD_SYNONYMS.values()) for w in re.split(r"[\s-]", k)],
+    "lakh", "lakhs", "crore", "crores",
 }
+# Sound-alike substitutions common in Indian English typing.
+_PHONETIC = [("ch", "c"), ("c", "k"), ("k", "c"), ("oo", "u"), ("u", "oo"), ("ee", "i"),
+             ("i", "ee"), ("ph", "f"), ("s", "z"), ("w", "v"), ("v", "w"), ("a", "e"),
+             ("e", "a"), ("ou", "o"), ("y", "i"), ("sch", "sk")]
 
 
 def _typo(rng: random.Random, word: str) -> str:
+    """One random misspelling: drop, swap, double a letter, or a sound-alike swap."""
+    op = rng.choice(["drop", "swap", "double", "phonetic", "phonetic"])
     i = rng.randrange(1, len(word) - 1)
-    if rng.random() < 0.5:
-        return word[:i] + word[i + 1:]                          # drop a character
-    return word[:i] + word[i + 1] + word[i] + word[i + 2:]       # swap two characters
+    if op == "drop":
+        return word[:i] + word[i + 1:]
+    if op == "swap":
+        return word[:i] + word[i + 1] + word[i] + word[i + 2:]
+    if op == "double":
+        return word[:i] + word[i] + word[i:]
+    options = [(a, b) for a, b in _PHONETIC if a in word[1:].lower()]
+    if not options:
+        return word[:i] + word[i + 1:]
+    a, b = rng.choice(options)
+    j = word.lower().find(a, 1)
+    return word[:j] + b + word[j + len(a):]
 
 
 def add_noise(rng: random.Random, text: str, loc_surface: str | None) -> str:
-    """Apply 1-2 realistic corruptions. Never touches digits, units or type words."""
+    """Apply 1-2 realistic corruptions. Never touches digits or direction words."""
     ops = rng.sample(["case", "typo", "punct", "pls", "nospace"], rng.choice([1, 1, 2]))
     for op in ops:
         if op == "case":
@@ -427,8 +497,11 @@ def add_noise(rng: random.Random, text: str, loc_surface: str | None) -> str:
             loc_words = set(loc_surface.lower().split()) if loc_surface else set()
             candidates = [i for i, w in enumerate(words)
                           if len(w) >= 4 and w.isalpha() and w.lower() not in _PROTECTED]
-            preferred = [i for i in candidates if words[i].lower() in loc_words]
-            pick = preferred if preferred and rng.random() < 0.7 else candidates
+            in_loc = [i for i in candidates if words[i].lower() in loc_words]
+            in_vocab = [i for i in candidates if words[i].lower() in _TYPE_AND_KEYWORD_WORDS]
+            roll = rng.random()
+            pick = (in_loc if in_loc and roll < 0.4 else
+                    in_vocab if in_vocab and roll < 0.8 else candidates)
             if pick:
                 i = rng.choice(pick)
                 words[i] = _typo(rng, words[i])
@@ -469,7 +542,7 @@ def render_example(rng: random.Random, template: tuple[str, str, bool, str]) -> 
         t["_surf"].pop("price", None)
     if "{kw}" not in fmt:
         t["keywords"] = []
-    slots = {"np": render_np(rng, t, plural), "loc": render_loc(rng, t, lang),
+    slots = {"np": render_np(rng, t, plural, lang), "loc": render_loc(rng, t, lang),
              "price": render_price(t), "kw": render_kw(rng, t)}
     fmt = re.sub(r"\[([^\]]*)\]",
                  lambda m: m.group(1) if all(slots[k] for k in re.findall(r"\{(\w+)\}", m.group(1))) else "",
@@ -488,8 +561,11 @@ _OFFTOPIC_SUFFIXES = ["", "", "", "?", " please", " pls", "!!", " now", " quickl
 
 def offtopic_example(rng: random.Random, pool: list[str]) -> tuple[str, dict]:
     """An off-topic query. The pool is small, so prefixes/suffixes/noise add
-    the variety needed to survive exact-string deduplication."""
-    if rng.random() < 0.08:
+    the variety needed to survive exact-string deduplication. The "local"
+    category's pool holds templates that are filled with place names."""
+    if pool and "{place}" in pool[0]:
+        text = rng.choice(_OFFTOPIC_PREFIXES) + _local_offtopic(rng, pool) + rng.choice(_OFFTOPIC_SUFFIXES)
+    elif rng.random() < 0.08:
         text = _gibberish(rng)
     else:
         text = rng.choice(_OFFTOPIC_PREFIXES) + rng.choice(pool) + rng.choice(_OFFTOPIC_SUFFIXES)
@@ -523,8 +599,11 @@ def split_templates(rng: random.Random) -> tuple[list, list]:
 
 
 def split_offtopic(rng: random.Random) -> tuple[dict, dict]:
+    """Split each off-topic category (and the generic-property pool) 75/25."""
     train, val = {}, {}
-    for cat, items in OFFTOPIC.items():
+    pools = {**OFFTOPIC, "local": OFFTOPIC_LOCAL_TEMPLATES, "homewords": OFFTOPIC_HOMEWORDS,
+             "generic": GENERIC_PROPERTY}
+    for cat, items in pools.items():
         items = items[:]
         rng.shuffle(items)
         n_val = max(1, round(len(items) * HOLDOUT_FRACTION))
@@ -540,10 +619,21 @@ def generate_split(rng: random.Random, n: int, templates: list, offtopic: dict,
     attempts = 0
     while len(records) < n and attempts < max_attempts:
         attempts += 1
-        if rng.random() > P_PROPERTY:
-            cat = rng.choice(list(offtopic))
+        roll = rng.random()
+        if roll > P_PROPERTY:
+            # local and homewords are the categories rules get wrong: weight them up.
+            cats = [c for c in offtopic if c != "generic"]
+            cat = rng.choices(cats, weights=[3 if c in ("local", "homewords") else 1 for c in cats])[0]
             query, target = offtopic_example(rng, offtopic[cat])
             tid = f"offtopic_{cat}"
+        elif roll < P_GENERIC:
+            query = (rng.choice(_OFFTOPIC_PREFIXES) + rng.choice(offtopic["generic"])
+                     + rng.choice(_OFFTOPIC_SUFFIXES))
+            if rng.random() < 0.3:
+                query = add_noise(rng, query, None)
+            _, target = offtopic_example(rng, ["x"])
+            target["is_property_query"] = True
+            tid = "generic"
         else:
             lang = rng.choices(list(LANG_WEIGHTS), weights=list(LANG_WEIGHTS.values()))[0]
             template = rng.choice(by_lang[lang])
@@ -618,7 +708,8 @@ def print_stats(splits: dict[str, list[dict]]) -> None:
             print(f"  price units           : {dict(units)}")
             print(f"  keywords count        : {dict(sorted(Counter(len(lb['keywords']) for lb in prop).items()))}")
         tids = Counter(r["template_id"] for r in records)
-        langs = Counter(t.split("_")[0] if t.startswith("offtopic") else t[:2] for t in tids.elements())
+        langs = Counter(t if t == "generic" else t.split("_")[0] if t.startswith("offtopic") else t[:2]
+                        for t in tids.elements())
         print(f"  language / offtopic   : {dict(langs)}")
         print(f"  templates used        : {len(tids)} distinct; top 5 {tids.most_common(5)}")
         print(f"  rules-parser agreement: {_rules_agreement(records):.0%}")
