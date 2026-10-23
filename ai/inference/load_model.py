@@ -137,7 +137,10 @@ def _load(adapter_dir: Path) -> tuple["PreTrainedModel", "PreTrainedTokenizerBas
         tokenizer.pad_token = tokenizer.eos_token
 
     if torch.cuda.is_available():
-        compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        # Native bf16 only (compute capability >= 8.0); is_bf16_supported() also
+        # counts emulation, which is slow.
+        native_bf16 = torch.cuda.get_device_capability(0)[0] >= 8
+        compute_dtype = torch.bfloat16 if native_bf16 else torch.float16
         model = AutoModelForCausalLM.from_pretrained(
             base,
             quantization_config=BitsAndBytesConfig(

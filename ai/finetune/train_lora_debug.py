@@ -272,7 +272,9 @@ def main() -> None:
     from ai.nlu.prompt import NLU_SYSTEM_PROMPT
     from ai.nlu.schema import extract_first_json, validate_model_output
 
-    bf16 = torch.cuda.is_bf16_supported()
+    # Native bf16 needs compute capability >= 8.0; is_bf16_supported() also counts
+    # slow emulation (e.g. True on a T4). The RTX 3050 is 8.6, so bf16 here.
+    bf16 = torch.cuda.get_device_capability(0)[0] >= 8
     compute_dtype = torch.bfloat16 if bf16 else torch.float16
     print(f"\nLoading {MODEL_NAME} in 4-bit NF4 (compute dtype {compute_dtype}) ...")
     t0 = time.time()
