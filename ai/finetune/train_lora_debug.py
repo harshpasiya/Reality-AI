@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import os
 import inspect
 import json
 import math
@@ -37,6 +38,9 @@ from typing import Any
 import numpy as np
 import torch
 import yaml
+
+# Caching works on Windows without symlinks; the warning is noise.
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FINETUNE_DIR = Path(__file__).resolve().parent
@@ -79,6 +83,13 @@ def print_versions() -> None:
 def template_kwargs(tokenizer) -> dict[str, Any]:
     """enable_thinking=False for templates that support it (Qwen3 hybrid models)."""
     return {"enable_thinking": False} if "enable_thinking" in (tokenizer.chat_template or "") else {}
+
+
+def dtype_kwarg(dtype: torch.dtype) -> dict[str, Any]:
+    """transformers >= 4.56 renamed from_pretrained(torch_dtype=) to dtype=."""
+    import transformers
+    major, minor = (int(x) for x in transformers.__version__.split(".")[:2])
+    return {"dtype": dtype} if (major, minor) >= (4, 56) else {"torch_dtype": dtype}
 
 
 def tokenize_example(example: dict, tokenizer, kwargs: dict[str, Any]) -> dict[str, list[int]]:
@@ -269,7 +280,7 @@ def main() -> None:
             load_in_4bit=True, bnb_4bit_quant_type="nf4",
             bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=compute_dtype),
         device_map={"": 0},
-        torch_dtype=compute_dtype,
+        **dtype_kwarg(compute_dtype),
     )
     model.config.use_cache = False
     print(f"  loaded in {time.time() - t0:.1f}s, GPU {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
