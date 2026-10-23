@@ -1,0 +1,40 @@
+# ==========================================================================
+# LoRA config — full run: Qwen/Qwen3-4B-Instruct-2507 on a Kaggle T4 (16 GB)
+# ==========================================================================
+# The Kaggle notebook (ai/finetune/train_lora_qwen3_kaggle.ipynb) can't read
+# repo files, so these values are inlined there — keep the two in sync.
+# ==========================================================================
+
+# ── r (rank) ──────────────────────────────────────────────────────────────
+# Twice the local rank. The 4B model is the one that ships, and the T4 has
+# room for the larger adapter and its optimizer state; r=16 gives more
+# capacity for the hard cases (typos, Hinglish, off-topic mentions of places)
+# while the adapter stays well under 500 MB.
+r: 16
+
+# ── lora_alpha ────────────────────────────────────────────────────────────
+# alpha = 2 x r (32 / 16 = 2.0): the same effective scaling as the local
+# config, so the 2e-4 learning rate transfers unchanged.
+lora_alpha: 32
+
+# ── lora_dropout ──────────────────────────────────────────────────────────
+# Same light regularisation as the local run (~3000 generated examples).
+lora_dropout: 0.05
+
+# ── bias ──────────────────────────────────────────────────────────────────
+bias: none
+
+# ── target_modules ────────────────────────────────────────────────────────
+# All seven Llama-style projections in Qwen3 (attention + gated MLP).
+# Print model.named_modules() once to confirm the names.
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+# ── task_type ─────────────────────────────────────────────────────────────
+task_type: CAUSAL_LM

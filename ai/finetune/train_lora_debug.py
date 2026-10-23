@@ -1,323 +1,323 @@
-"""Local debug fine-tuning script — validates the LoRA pipeline end-to-end.
+"""Local debug LoRA run for the Qwen3 NLU adapter (RTX 3050, 4 GB VRAM).
 
-Proves the full training loop works on the RTX 3050 (4 GB VRAM) with
-Phi-3-mini before spending Kaggle GPU hours on the real Mistral-7B run.
+Goal: prove the whole pipeline works — data -> chat template -> 4-bit model
+-> LoRA -> training -> adapter save -> JSON generation — on the local GPU
+before spending Kaggle hours on the real Qwen3-4B run. The adapter produced
+here is a smoke-test artefact, not the one that ships.
 
-Usage:
-    python -m ai.finetune.train_lora_debug               # fresh run
-    python -m ai.finetune.train_lora_debug --resume       # resume from checkpoint
+Usage (from repo root):
+    python -m ai.finetune.prepare_extraction_dataset      # writes the data first
+    python -m ai.finetune.train_lora_debug --dry-run      # tokenizer only: lengths + masking check
+    python -m ai.finetune.train_lora_debug                # full debug run
 
-The script saves ONLY the LoRA adapter weights (not the full model) to
-OUTPUT_DIR.  The adapter can later be loaded with:
-    peft.AutoPeftModelForCausalLM.from_pretrained(OUTPUT_DIR)
+Design notes:
+  - Loss is computed on the assistant's JSON only. Every example starts with
+    the same ~150-token system prompt; training on it would mostly teach the
+    model to memorise that prompt. Examples are tokenized here with prompt
+    tokens masked to -100, and TRL's own dataset preparation is skipped
+    (dataset_kwargs={"skip_prepare_dataset": True}) — which also sidesteps
+    most of TRL's argument churn between versions.
+  - The model's own chat template is used unchanged (never overridden), with
+    enable_thinking=False when the template supports it, so training text is
+    byte-identical to what ai/nlu/query_parser.py will send at inference.
 """
 
 from __future__ import annotations
 
 import argparse
-import logging
-import os
+import dataclasses
+import inspect
+import json
+import math
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 import yaml
-from datasets import Dataset, load_dataset
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-)
-from trl import SFTConfig, SFTTrainer
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-logger = logging.getLogger(__name__)
+REPO_ROOT = Path(__file__).resolve().parents[2]
+FINETUNE_DIR = Path(__file__).resolve().parent
+
+# =========================================================================
+# Configuration
+# =========================================================================
+
+MODEL_NAME: str = "Qwen/Qwen3-1.7B"
+DATA: Path = FINETUNE_DIR / "data" / "debug_train.jsonl"
+VAL_DATA: Path = FINETUNE_DIR / "data" / "val.jsonl"
+OUTPUT_DIR: Path = FINETUNE_DIR / "adapters" / "debug-qwen3"
+SCRATCH_DIR: Path = FINETUNE_DIR / "adapters" / "_scratch-debug"
+LORA_CONFIG_PATH: Path = FINETUNE_DIR / "configs" / "lora_config_local.yaml"
+
+EPOCHS: int = 2
+LR: float = 2e-4
+BATCH: int = 1
+GRAD_ACCUM: int = 8           # effective batch size 8
+LOG_EVERY: int = 5
+SANITY_QUERIES: int = 5
+MAX_NEW_TOKENS: int = 160     # the JSON is ~60-90 tokens; 160 leaves headroom
+MAX_ADAPTER_MB: int = 500
 
 
 # =========================================================================
-# Configuration constants — change these, not inline values
-# =========================================================================
-
-MODEL_NAME: str = "microsoft/Phi-3-mini-4k-instruct"
-DATASET_PATH: str = "ai/finetune/data/debug_dataset.jsonl"
-OUTPUT_DIR: str = "ai/finetune/adapters/debug-run/"
-LORA_CONFIG_PATH: str = "ai/finetune/configs/lora_config.yaml"
-
-NUM_EPOCHS: int = 3
-LEARNING_RATE: float = 2e-4
-PER_DEVICE_BATCH_SIZE: int = 1
-GRADIENT_ACCUMULATION_STEPS: int = 8
-MAX_SEQ_LENGTH: int = 1024
-
-
-# =========================================================================
-# Helpers
+# Helpers shared with the Kaggle notebook (inlined there — keep in sync)
 # =========================================================================
 
 
-def _load_lora_config(config_path: str) -> LoraConfig:
-    """Load LoRA hyperparameters from a YAML file and return a LoraConfig.
+def print_versions() -> None:
+    import importlib
+    for name in ("torch", "transformers", "peft", "trl", "bitsandbytes", "accelerate", "datasets"):
+        try:
+            print(f"  {name:<13} {importlib.import_module(name).__version__}")
+        except Exception as exc:  # noqa: BLE001 - report, don't crash
+            print(f"  {name:<13} NOT AVAILABLE ({exc})")
 
-    Only the PEFT-relevant keys (r, lora_alpha, lora_dropout,
-    target_modules, task_type) are extracted; the ``training`` sub-dict
-    is ignored here (consumed directly by TrainingArguments).
+
+def template_kwargs(tokenizer) -> dict[str, Any]:
+    """enable_thinking=False for templates that support it (Qwen3 hybrid models)."""
+    return {"enable_thinking": False} if "enable_thinking" in (tokenizer.chat_template or "") else {}
+
+
+def tokenize_example(example: dict, tokenizer, kwargs: dict[str, Any]) -> dict[str, list[int]]:
+    """input_ids / attention_mask / labels with the prompt masked to -100."""
+    messages = example["messages"]
+    prompt = tokenizer.apply_chat_template(
+        messages[:-1], tokenize=False, add_generation_prompt=True, **kwargs)
+    full = tokenizer.apply_chat_template(messages, tokenize=False, **kwargs)
+    if not full.startswith(prompt):
+        raise ValueError(
+            "Chat template renders the prompt differently with and without the "
+            "assistant turn, so the loss mask can't be placed.\n"
+            f"PROMPT: {prompt!r}\nFULL:   {full!r}")
+    prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+    full_ids = tokenizer(full, add_special_tokens=False)["input_ids"]
+    if full_ids[:len(prompt_ids)] != prompt_ids:
+        raise ValueError("Tokenization of the prompt changes when the answer is appended.")
+    labels = [-100] * len(prompt_ids) + full_ids[len(prompt_ids):]
+    return {"input_ids": full_ids, "attention_mask": [1] * len(full_ids), "labels": labels}
+
+
+def measure_max_len(lengths: list[int]) -> int:
+    """95th percentile, rounded up to a multiple of 64, clamped to 256-512."""
+    p95 = float(np.percentile(lengths, 95))
+    return int(min(512, max(256, math.ceil(p95 / 64) * 64)))
+
+
+def build_trainer(model, tokenizer, train_ds, output_dir: str, max_len: int, *,
+                  epochs: float, lr: float, batch: int, grad_accum: int, bf16: bool,
+                  max_steps: int = -1, callbacks: list | None = None):
+    """SFTTrainer built by inspecting the installed TRL's signatures.
+
+    Newer TRL renamed max_seq_length -> max_length and tokenizer ->
+    processing_class; only arguments that exist in this version are passed.
     """
-    path = Path(config_path)
+    from transformers import DataCollatorForSeq2Seq
+    from trl import SFTConfig, SFTTrainer
+
+    wanted: dict[str, Any] = {
+        "output_dir": output_dir,
+        "num_train_epochs": epochs,
+        "max_steps": max_steps,
+        "learning_rate": lr,
+        "per_device_train_batch_size": batch,
+        "gradient_accumulation_steps": grad_accum,
+        "lr_scheduler_type": "cosine",
+        "warmup_ratio": 0.05,
+        "logging_steps": LOG_EVERY,
+        "save_strategy": "no",
+        "report_to": "none",
+        "optim": "paged_adamw_8bit",
+        "gradient_checkpointing": True,
+        "gradient_checkpointing_kwargs": {"use_reentrant": False},
+        "fp16": not bf16,
+        "bf16": bf16,
+        "dataset_kwargs": {"skip_prepare_dataset": True},
+        "remove_unused_columns": False,
+        "max_length": max_len,
+        "max_seq_length": max_len,
+    }
+    fields = {f.name for f in dataclasses.fields(SFTConfig)}
+    dropped = [k for k in wanted if k not in fields]
+    if "max_length" in fields:
+        wanted.pop("max_seq_length", None)
+    config = SFTConfig(**{k: v for k, v in wanted.items() if k in fields})
+    dropped = [k for k in dropped if k not in ("max_length", "max_seq_length")]
+    if dropped:
+        print(f"  [info] this TRL version has no SFTConfig field(s): {dropped}")
+
+    trainer_kwargs: dict[str, Any] = {
+        "model": model,
+        "args": config,
+        "train_dataset": train_ds,
+        "data_collator": DataCollatorForSeq2Seq(tokenizer, padding=True, label_pad_token_id=-100),
+        "callbacks": callbacks or [],
+    }
+    params = inspect.signature(SFTTrainer.__init__).parameters
+    trainer_kwargs["processing_class" if "processing_class" in params else "tokenizer"] = tokenizer
+    return SFTTrainer(**trainer_kwargs)
+
+
+def make_callbacks():
+    """NaN/inf stop + loss and GPU-memory logging."""
+    from transformers import TrainerCallback
+
+    class NanStop(TrainerCallback):
+        def on_log(self, args, state, control, logs=None, **kwargs):
+            loss = (logs or {}).get("loss")
+            if loss is not None and not math.isfinite(loss):
+                print(f"\n[STOP] loss became {loss} at step {state.global_step}. "
+                      "Lower LR (e.g. 1e-4) or check the data; training stopped.")
+                control.should_training_stop = True
+
+    class MemLog(TrainerCallback):
+        def on_log(self, args, state, control, logs=None, **kwargs):
+            if logs and "loss" in logs and torch.cuda.is_available():
+                gb = torch.cuda.max_memory_allocated() / 1024**3
+                print(f"  step {state.global_step:>4}  loss {logs['loss']:.4f}  peak GPU {gb:.2f} GB")
+
+    return [NanStop(), MemLog()]
+
+
+def generate_json(model, tokenizer, queries: list[str], system_prompt: str,
+                  kwargs: dict[str, Any], max_new_tokens: int = MAX_NEW_TOKENS) -> list[str]:
+    """Greedy generation, one query at a time (fine for a handful of checks)."""
+    outputs = []
+    model.eval()
+    for q in queries:
+        msgs = [{"role": "system", "content": system_prompt}, {"role": "user", "content": q}]
+        text = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True, **kwargs)
+        enc = tokenizer(text, return_tensors="pt", add_special_tokens=False).to(model.device)
+        with torch.no_grad():
+            out = model.generate(**enc, max_new_tokens=max_new_tokens, do_sample=False,
+                                 pad_token_id=tokenizer.pad_token_id, use_cache=True)
+        outputs.append(tokenizer.decode(out[0][enc["input_ids"].shape[1]:], skip_special_tokens=True))
+    return outputs
+
+
+def dir_size_mb(path: Path) -> float:
+    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / 1024**2
+
+
+# =========================================================================
+# Main
+# =========================================================================
+
+
+def _load_jsonl(path: Path) -> list[dict]:
     if not path.exists():
-        raise FileNotFoundError(f"LoRA config not found: {path.resolve()}")
-
-    with open(path, encoding="utf-8") as f:
-        cfg: dict[str, Any] = yaml.safe_load(f)
-
-    return LoraConfig(
-        r=cfg["r"],
-        lora_alpha=cfg["lora_alpha"],
-        lora_dropout=cfg["lora_dropout"],
-        target_modules=cfg["target_modules"],
-        task_type=cfg["task_type"],
-        bias="none",
-    )
+        sys.exit(f"[ERROR] {path} not found. Run: python -m ai.finetune.prepare_extraction_dataset")
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def _detect_compute_dtype() -> torch.dtype:
-    """Return bfloat16 if the GPU supports it, else float16.
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Local debug LoRA run for the Qwen3 NLU adapter.")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="load only the tokenizer: check masking and sequence lengths, then exit")
+    args = ap.parse_args()
 
-    RTX 3050 (Ampere) supports bfloat16, but we check at runtime to be
-    safe for other environments.
-    """
-    if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
-        logger.info("GPU supports bfloat16 -- using bf16 compute dtype.")
-        return torch.bfloat16
-    logger.info("bfloat16 not supported -- falling back to float16.")
-    return torch.float16
+    print("Library versions:")
+    print_versions()
 
+    from datasets import Dataset
+    from transformers import AutoTokenizer
 
-def _find_latest_checkpoint(output_dir: str) -> str | None:
-    """Return the path to the latest checkpoint-* directory, or None."""
-    out = Path(output_dir)
-    if not out.exists():
-        return None
-    checkpoints = sorted(
-        [d for d in out.iterdir() if d.is_dir() and d.name.startswith("checkpoint-")],
-        key=lambda d: int(d.name.split("-")[-1]),
-    )
-    if checkpoints:
-        return str(checkpoints[-1])
-    return None
-
-
-def _format_time(seconds: float) -> str:
-    """Format elapsed seconds as a human-readable string."""
-    m, s = divmod(int(seconds), 60)
-    h, m = divmod(m, 60)
-    if h > 0:
-        return f"{h}h {m}m {s}s"
-    return f"{m}m {s}s"
-
-
-# =========================================================================
-# Main training function
-# =========================================================================
-
-
-def train(resume: bool = False) -> None:
-    """Run the local debug fine-tuning loop."""
-
-    # ── 0. Pre-flight checks ─────────────────────────────────────────────
-    if not torch.cuda.is_available():
-        logger.error(
-            "CUDA is not available.  This script requires a GPU.\n"
-            "  - Check that PyTorch was installed with CUDA support\n"
-            "    (pip install torch --index-url https://download.pytorch.org/whl/cu121)\n"
-            "  - Run `nvidia-smi` to verify your driver is working."
-        )
-        sys.exit(1)
-
-    dataset_file = Path(DATASET_PATH)
-    if not dataset_file.exists():
-        logger.error(
-            "Dataset not found at %s.\n"
-            "  Generate it first:\n"
-            "    python -m ai.finetune.prepare_dataset --mode debug",
-            dataset_file.resolve(),
-        )
-        sys.exit(1)
-
-    gpu_name = torch.cuda.get_device_name(0)
-    vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
-    logger.info("GPU: %s (%.1f GB VRAM)", gpu_name, vram_gb)
-
-    # ── 1. Load LoRA config from YAML ────────────────────────────────────
-    lora_config = _load_lora_config(LORA_CONFIG_PATH)
-    logger.info(
-        "LoRA config: r=%d, alpha=%d, dropout=%.2f, targets=%s",
-        lora_config.r, lora_config.lora_alpha,
-        lora_config.lora_dropout, lora_config.target_modules,
-    )
-
-    # ── 2. Load tokenizer ────────────────────────────────────────────────
-    logger.info("Loading tokenizer: %s", MODEL_NAME)
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    tokenizer.padding_side = "right"
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-    tokenizer.padding_side = "right"
+    tkw = template_kwargs(tokenizer)
+    print(f"\nChat template kwargs: {tkw or '(none)'}")
 
-    # ── 3. Load dataset and apply chat template ──────────────────────────
-    logger.info("Loading dataset: %s", DATASET_PATH)
-    dataset = load_dataset("json", data_files=DATASET_PATH, split="train")
-    logger.info("Dataset size: %d examples", len(dataset))
+    rows = _load_jsonl(DATA)
+    tokenized = [tokenize_example(r, tokenizer, tkw) for r in rows]
+    lengths = [len(t["input_ids"]) for t in tokenized]
+    max_len = measure_max_len(lengths)
+    kept = [t for t in tokenized if len(t["input_ids"]) <= max_len]
+    print(f"Examples: {len(rows)}  |  tokens min/median/p95/max: {min(lengths)}/"
+          f"{int(np.median(lengths))}/{int(np.percentile(lengths, 95))}/{max(lengths)}")
+    print(f"MAX_SEQ_LENGTH = {max_len}  ({len(rows) - len(kept)} longer examples dropped, "
+          "never truncated: a cut-off JSON would teach broken output)")
 
-    def _apply_chat_template(example: dict) -> dict:
-        """Format the messages list using the tokenizer's chat template."""
-        text = tokenizer.apply_chat_template(
-            example["messages"],
-            tokenize=False,
-            add_generation_prompt=False,
-        )
-        return {"text": text}
+    sample = tokenized[0]
+    answer_ids = [t for t, lab in zip(sample["input_ids"], sample["labels"]) if lab != -100]
+    print(f"\nLoss is computed on {len(answer_ids)} of {len(sample['input_ids'])} tokens of example 0:")
+    print("  " + repr(tokenizer.decode(answer_ids)))
 
-    dataset = dataset.map(_apply_chat_template, remove_columns=dataset.column_names)
-    logger.info("Chat template applied.  Sample (first 200 chars):\n  %s", dataset[0]["text"][:200])
+    if args.dry_run:
+        print("\n[OK] dry run finished — tokenizer, template and masking all work.")
+        return
 
-    # ── 4. Load base model in 4-bit ──────────────────────────────────────
-    compute_dtype = _detect_compute_dtype()
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=compute_dtype,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-    )
+    if not torch.cuda.is_available():
+        sys.exit("[ERROR] No CUDA GPU detected. This debug run needs the RTX 3050.")
 
-    logger.info("Loading model: %s (4-bit quantized)", MODEL_NAME)
+    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+
+    from ai.nlu.prompt import NLU_SYSTEM_PROMPT
+    from ai.nlu.schema import extract_first_json, validate_model_output
+
+    bf16 = torch.cuda.is_bf16_supported()
+    compute_dtype = torch.bfloat16 if bf16 else torch.float16
+    print(f"\nLoading {MODEL_NAME} in 4-bit NF4 (compute dtype {compute_dtype}) ...")
+    t0 = time.time()
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
-        quantization_config=bnb_config,
-        device_map="auto",
-        trust_remote_code=True,
-        attn_implementation="eager",  # Flash Attention not available on all GPUs
+        quantization_config=BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=compute_dtype),
+        device_map={"": 0},
+        torch_dtype=compute_dtype,
     )
-    model.config.use_cache = False  # incompatible with gradient checkpointing
+    model.config.use_cache = False
+    print(f"  loaded in {time.time() - t0:.1f}s, GPU {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
 
-    # ── 5. Prepare for k-bit training and apply LoRA ─────────────────────
-    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
-    model = get_peft_model(model, lora_config)
+    model = prepare_model_for_kbit_training(
+        model, use_gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False})
+    lora_cfg = yaml.safe_load(LORA_CONFIG_PATH.read_text(encoding="utf-8"))
+    model = get_peft_model(model, LoraConfig(**lora_cfg))
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total = sum(p.numel() for p in model.parameters())
+    pct = 100 * trainable / total
+    print(f"  trainable parameters: {trainable:,} of {total:,} ({pct:.2f}%)")
+    assert 0 < pct < 5, f"trainable share {pct:.2f}% is outside (0, 5) — check target_modules"
 
-    trainable, total = model.get_nb_trainable_parameters()
-    pct = 100.0 * trainable / total if total > 0 else 0
-    logger.info(
-        "Trainable parameters: %s / %s (%.2f%%)",
-        f"{trainable:,}", f"{total:,}", pct,
-    )
+    train_ds = Dataset.from_list(kept)
+    # Trainer scratch lives outside OUTPUT_DIR so the adapter folder holds only the adapter.
+    trainer = build_trainer(model, tokenizer, train_ds, str(SCRATCH_DIR), max_len,
+                            epochs=EPOCHS, lr=LR, batch=BATCH, grad_accum=GRAD_ACCUM,
+                            bf16=bf16, callbacks=make_callbacks())
 
-    # ── 6. Training arguments ────────────────────────────────────────────
-    use_bf16 = (compute_dtype == torch.bfloat16)
-    training_args = SFTConfig(
-        output_dir=OUTPUT_DIR,
-        num_train_epochs=NUM_EPOCHS,
-        per_device_train_batch_size=PER_DEVICE_BATCH_SIZE,
-        gradient_accumulation_steps=GRADIENT_ACCUMULATION_STEPS,
-        learning_rate=LEARNING_RATE,
-        warmup_ratio=0.05,
-        logging_steps=5,
-        save_strategy="epoch",
-        gradient_checkpointing=True,
-        optim="paged_adamw_8bit",
-        fp16=not use_bf16,
-        bf16=use_bf16,
-        max_grad_norm=0.3,
-        max_seq_length=MAX_SEQ_LENGTH,
-        packing=False,
-        dataset_text_field="text",
-        report_to="none",
-        dataloader_pin_memory=False,
-    )
-
-    # ── 7. Check for resume checkpoint ───────────────────────────────────
-    resume_from = None
-    if resume:
-        resume_from = _find_latest_checkpoint(OUTPUT_DIR)
-        if resume_from:
-            logger.info("Resuming from checkpoint: %s", resume_from)
-        else:
-            logger.warning("--resume passed but no checkpoint found. Starting fresh.")
-
-    # ── 8. Create trainer ────────────────────────────────────────────────
-    trainer = SFTTrainer(
-        model=model,
-        processing_class=tokenizer,
-        train_dataset=dataset,
-        args=training_args,
-    )
-
-    # ── 9. Train ─────────────────────────────────────────────────────────
-    logger.info("=" * 60)
-    logger.info("Starting training (%d epochs, effective batch=%d)",
-                NUM_EPOCHS, PER_DEVICE_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS)
-    logger.info("=" * 60)
-
+    print(f"\nTraining {EPOCHS} epochs on {len(kept)} examples ...")
     t0 = time.time()
-
     try:
-        result = trainer.train(resume_from_checkpoint=resume_from)
+        result = trainer.train()
     except torch.cuda.OutOfMemoryError:
-        logger.error(
-            "\n"
-            "  !! CUDA Out of Memory !!\n"
-            "\n"
-            "  The model + optimizer + activations don't fit in %.1f GB VRAM.\n"
-            "  Try one or more of these fixes:\n"
-            "\n"
-            "  1. Reduce PER_DEVICE_BATCH_SIZE (currently %d)\n"
-            "  2. Increase GRADIENT_ACCUMULATION_STEPS to compensate\n"
-            "  3. Reduce MAX_SEQ_LENGTH (currently %d)\n"
-            "  4. Close other GPU-using applications (browsers, etc.)\n"
-            "\n"
-            "  Current settings: batch=%d x grad_accum=%d = effective %d\n",
-            vram_gb,
-            PER_DEVICE_BATCH_SIZE,
-            MAX_SEQ_LENGTH,
-            PER_DEVICE_BATCH_SIZE,
-            GRADIENT_ACCUMULATION_STEPS,
-            PER_DEVICE_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS,
-        )
+        print("\n[OOM] Out of GPU memory. Try, in order:\n"
+              "  1. Reduce MAX_SEQ_LENGTH (drop the clamp floor from 256 to 192 in measure_max_len)\n"
+              "  2. Switch MODEL_NAME to 'Qwen/Qwen3-0.6B'")
         sys.exit(1)
+    print(f"\nTraining done in {(time.time() - t0) / 60:.1f} min, final train loss {result.training_loss:.4f}")
 
-    elapsed = time.time() - t0
-
-    # ── 10. Save adapter and report ──────────────────────────────────────
-    logger.info("Saving adapter weights to %s", OUTPUT_DIR)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(OUTPUT_DIR)
     tokenizer.save_pretrained(OUTPUT_DIR)
+    size = dir_size_mb(OUTPUT_DIR)
+    print(f"Adapter saved to {OUTPUT_DIR} ({size:.1f} MB)")
+    assert size < MAX_ADAPTER_MB, f"adapter is {size:.0f} MB — expected well under {MAX_ADAPTER_MB} MB"
 
-    final_loss = result.training_loss
-    logger.info("=" * 60)
-    logger.info("  Training complete!")
-    logger.info("  Final loss:    %.4f", final_loss)
-    logger.info("  Total time:    %s", _format_time(elapsed))
-    logger.info("  Adapter saved: %s", Path(OUTPUT_DIR).resolve())
-    logger.info("  Trainable:     %s params (%.2f%%)", f"{trainable:,}", pct)
-    logger.info("=" * 60)
+    print("\nSanity check on held-out val queries (greedy):")
+    model.config.use_cache = True
+    val_rows = _load_jsonl(VAL_DATA)[:SANITY_QUERIES]
+    queries = [r["messages"][1]["content"] for r in val_rows]
+    for q, raw in zip(queries, generate_json(model, tokenizer, queries, NLU_SYSTEM_PROMPT, tkw)):
+        obj = extract_first_json(raw)
+        valid = obj is not None and validate_model_output(obj) is not None
+        print(f"\n  query : {q}\n  output: {raw.strip()}\n  JSON parsed: {obj is not None}, valid: {valid}")
 
-
-# =========================================================================
-# CLI
-# =========================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Debug LoRA fine-tuning on Phi-3-mini (local GPU).",
-    )
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="Resume training from the latest checkpoint in OUTPUT_DIR.",
-    )
-    args = parser.parse_args()
-    train(resume=args.resume)
+    main()
