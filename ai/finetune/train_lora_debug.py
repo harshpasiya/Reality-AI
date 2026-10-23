@@ -154,6 +154,8 @@ def build_trainer(model, tokenizer, train_ds, output_dir: str, max_len: int, *,
     dropped = [k for k in wanted if k not in fields]
     if "max_length" in fields:
         wanted.pop("max_seq_length", None)
+    if "warmup_ratio" not in fields:  # newer transformers: warmup_steps < 1 is a ratio
+        wanted["warmup_steps"] = wanted.pop("warmup_ratio")
     config = SFTConfig(**{k: v for k, v in wanted.items() if k in fields})
     dropped = [k for k in dropped if k not in ("max_length", "max_seq_length")]
     if dropped:
