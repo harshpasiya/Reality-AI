@@ -294,6 +294,11 @@ def main() -> None:
         gradient_checkpointing_kwargs={"use_reentrant": False})
     lora_cfg = yaml.safe_load(LORA_CONFIG_PATH.read_text(encoding="utf-8"))
     model = get_peft_model(model, LoraConfig(**lora_cfg))
+    # fp16 training's GradScaler only accepts fp32 trainable weights; newer PEFT
+    # versions can leave LoRA weights in bf16/fp16, so upcast them explicitly.
+    for p in model.parameters():
+        if p.requires_grad and p.dtype != torch.float32:
+            p.data = p.data.float()
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
     pct = 100 * trainable / total
