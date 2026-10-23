@@ -310,9 +310,11 @@ def generate_listings(n: int = 210) -> list[dict]:
     for i in range(n):
         neighbourhood = NEIGHBOURHOODS[i % len(NEIGHBOURHOODS)]
         if random.random() < 0.75:
-            listings.append(_make_flat(neighbourhood))
+            listing = _make_flat(neighbourhood)
         else:
-            listings.append(_make_land(neighbourhood))
+            listing = _make_land(neighbourhood)
+        listing["_neighbourhood"] = neighbourhood["name"]  # for the seed summary only, not a DB column
+        listings.append(listing)
     random.shuffle(listings)
     return listings
 
@@ -340,6 +342,11 @@ def main() -> None:
         if deleted:
             print(f"  Cleared {deleted} existing row(s) from listings table.")
 
+        # _neighbourhood is only for the summary below — strip it before the
+        # INSERT so the params dict matches the table's actual columns exactly.
+        insert_rows = [
+            {k: v for k, v in l.items() if k != "_neighbourhood"} for l in listings
+        ]
         conn.execute(
             text(
                 """
@@ -347,7 +354,7 @@ def main() -> None:
                 VALUES (:title, :description, :price, :property_type, :lat, :lng)
                 """
             ),
-            listings,
+            insert_rows,
         )
 
     # ── Summary ────────────────────────────────────────────────────────────
@@ -357,18 +364,17 @@ def main() -> None:
 
     by_area: dict[str, int] = {}
     for l in listings:
-        # Find which neighbourhood this listing belongs to (by nearest anchor)
-        pass
+        area_name = l["_neighbourhood"]
+        by_area[area_name] = by_area.get(area_name, 0) + 1
 
     print(f"\n[OK] Seeded {len(listings)} Surat listings into '{DATABASE_URL.split('/')[-1]}':")
     print(f"   Property types : {flat_count} flat | {land_count} house_land")
     print(f"   Price range    : Rs.{min(prices):,.0f}  --  Rs.{max(prices):,.0f}")
     print(f"   Avg price      : Rs.{sum(prices)/len(prices):,.0f}")
     print(f"   Neighbourhoods : {len(NEIGHBOURHOODS)} areas across Surat city")
-    print(f"   Coverage       : Adajan, Vesu, Athwa, Piplod, Citylight, Pal, Althan,")
-    print(f"                    Bhatar, Ghod Dod Rd, Palanpur, Jahangirpura, Varachha,")
-    print(f"                    Katargam, Udhna, Dumas, Sarthana, Rander, Sachin,")
-    print(f"                    Puna Kumbharia, Kapodra")
+    print(f"   Listings per area:")
+    for area_name, count in sorted(by_area.items(), key=lambda x: -x[1]):
+        print(f"     {area_name:<18} {count:>3}")
     print(f"\n   Sample listings:")
     for l in random.sample(listings, 5):
         print(f"     [{l['property_type'][:4]}] {l['title']}  (Rs.{float(l['price']):,.0f})")

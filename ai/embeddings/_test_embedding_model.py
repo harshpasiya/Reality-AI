@@ -56,7 +56,7 @@ def test_embedding_dim_matches_constant(model: EmbeddingModel) -> None:
 
 def test_embed_returns_correct_length(model: EmbeddingModel) -> None:
     """embed() output length must equal EMBEDDING_DIM."""
-    vector = model.embed("3BHK flat near Bopal, Ahmedabad")
+    vector = model.embed("3BHK flat near Adajan, Surat")
     assert len(vector) == EMBEDDING_DIM
 
 
@@ -89,7 +89,7 @@ def test_embed_and_embed_batch_consistency(model: EmbeddingModel) -> None:
     different encode configuration, which would corrupt cosine-similarity
     results in pgvector.
     """
-    text = "Spacious 2BHK apartment with parking, near Satellite, Ahmedabad"
+    text = "Spacious 2BHK apartment with parking, near Vesu, Surat"
     single = model.embed(text)
     batch = model.embed_batch([text])[0]
 
@@ -173,9 +173,9 @@ def test_embed_very_long_string_does_not_crash(model: EmbeddingModel) -> None:
 def test_embed_batch_output_length_matches_input(model: EmbeddingModel) -> None:
     """embed_batch() must return exactly one vector per input text."""
     texts = [
-        "1BHK near BRTS, Ahmedabad",
-        "Villa with garden in Shilaj",
-        "Commercial plot in Sanand GIDC",
+        "1BHK near BRTS, Surat",
+        "Villa with garden in Athwa",
+        "Commercial plot in Sachin GIDC",
     ]
     result = model.embed_batch(texts)
     assert len(result) == len(texts), (
