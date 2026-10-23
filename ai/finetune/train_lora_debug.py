@@ -191,7 +191,21 @@ def make_callbacks():
                 gb = torch.cuda.max_memory_allocated() / 1024**3
                 print(f"  step {state.global_step:>4}  loss {logs['loss']:.4f}  peak GPU {gb:.2f} GB")
 
-    return [NanStop(), MemLog()]
+    class Fp32Trainable(TrainerCallback):
+        # Some TRL versions cast LoRA weights to the model's dtype inside the
+        # trainer; fp16 training's GradScaler needs them fp32.
+        def on_train_begin(self, args, state, control, model=None, **kwargs):
+            if model is None:
+                return
+            fixed = 0
+            for p in model.parameters():
+                if p.requires_grad and p.dtype != torch.float32:
+                    p.data = p.data.float()
+                    fixed += 1
+            if fixed:
+                print(f"  on_train_begin: upcast {fixed} trainable tensors to fp32")
+
+    return [NanStop(), MemLog(), Fp32Trainable()]
 
 
 def generate_json(model, tokenizer, queries: list[str], system_prompt: str,
