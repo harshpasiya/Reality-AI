@@ -1,0 +1,6 @@
+{"query": "3bhk flat in vesu under 80 lakh", "expected": {"is_property_query": true, "bhk": 3, "locality": "Vesu", "price_min": null, "price_max": {"amount": 80, "unit": "lakh"}, "property_type": "flat", "keywords": []}, "tag": "normal"}
+{"query": "anything above 1.5 cr?", "expected": {"is_property_query": true, "bhk": null, "locality": null, "price_min": {"amount": 1.5, "unit": "crore"}, "price_max": null, "property_type": null, "keywords": []}, "tag": "price-only"}
+{"query": "2bhk near vr mal with pool", "expected": {"is_property_query": true, "bhk": 2, "locality": "VR Mall", "price_min": null, "price_max": null, "property_type": null, "keywords": ["swimming pool"]}, "tag": "typo"}
+{"query": "adajan me 2 bhk chahiye 60 lakh tak", "expected": {"is_property_query": true, "bhk": 2, "locality": "Adajan", "price_min": null, "price_max": {"amount": 60, "unit": "lakh"}, "property_type": null, "keywords": []}, "tag": "hinglish"}
+{"query": "what's the weather like?", "expected": {"is_property_query": false, "bhk": null, "locality": null, "price_min": null, "price_max": null, "property_type": null, "keywords": []}, "tag": "offtopic"}
+{"query": "show me what you've got", "expected": {"is_property_query": true, "bhk": null, "locality": null, "price_min": null, "price_max": null, "property_type": null, "keywords": []}, "tag": "no-filters"}
