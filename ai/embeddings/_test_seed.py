@@ -5,6 +5,15 @@ Run this after `docker-compose up -d` to populate the DB for local AI testing.
 
 Usage (from repo root, with .venv active):
     python -m ai.embeddings._test_seed
+
+Re-seeding after the Qwen3 migration (adds the bhk column, drops the old
+IVFFlat index) — works on an existing Docker volume, no `down -v` needed:
+    docker-compose up -d
+    python -m ai.embeddings._test_seed
+    python -m ai.embeddings.embed_listings     # new rows need embeddings again
+
+`bhk` is a local-test column only: Person 2's real schema stores rooms in a
+`rooms` JSON field, so the retriever's BHK filter gets mapped at merge time.
 """
 
 from __future__ import annotations
@@ -268,6 +277,7 @@ def _make_flat(neighbourhood: dict) -> dict:
         "description": desc,
         "price": Decimal(str(price)),
         "property_type": "flat",
+        "bhk": bhk,
         "lat": _jitter(neighbourhood["lat"]),
         "lng": _jitter(neighbourhood["lng"]),
     }
@@ -298,6 +308,7 @@ def _make_land(neighbourhood: dict) -> dict:
         "description": desc,
         "price": Decimal(str(price)),
         "property_type": "house_land",
+        "bhk": None,  # plots have no bedroom count
         "lat": _jitter(neighbourhood["lat"]),
         "lng": _jitter(neighbourhood["lng"]),
     }
@@ -338,6 +349,11 @@ def main() -> None:
     listings = generate_listings(210)
 
     with engine.begin() as conn:
+        # Bring a database created by the older init.sql up to date (both no-ops
+        # on a fresh volume): the retriever filters on bhk, and the IVFFlat index
+        # built on an empty table returned too few rows once filters were added.
+        conn.execute(text("ALTER TABLE listings ADD COLUMN IF NOT EXISTS bhk INTEGER"))
+        conn.execute(text("DROP INDEX IF EXISTS listings_embedding_idx"))
         deleted = conn.execute(text("DELETE FROM listings")).rowcount
         if deleted:
             print(f"  Cleared {deleted} existing row(s) from listings table.")
@@ -350,8 +366,8 @@ def main() -> None:
         conn.execute(
             text(
                 """
-                INSERT INTO listings (title, description, price, property_type, lat, lng)
-                VALUES (:title, :description, :price, :property_type, :lat, :lng)
+                INSERT INTO listings (title, description, price, property_type, bhk, lat, lng)
+                VALUES (:title, :description, :price, :property_type, :bhk, :lat, :lng)
                 """
             ),
             insert_rows,

@@ -1,7 +1,10 @@
 """Interactive console chat demo for Reality AI.
 
 A live, conversational demo of the full RAG pipeline:
-  query → semantic retrieval → fine-tuned model → response
+  query → query understanding (rules + Qwen3 LoRA) → filtered retrieval → templated reply
+
+Runs without a GPU: the NLU model is optional, and the parser falls back to
+rules when it's unavailable (set NLU_BACKEND=rules to skip it entirely).
 
 Perfect for pitching — shows the entire AI track working end-to-end
 in a single terminal window.
@@ -13,13 +16,13 @@ Commands during the chat:
     /quit or /exit   — end the session
     /clear           — clear conversation history
     /listings        — show the raw listings retrieved for the last query
-    /reload          — hot-reload the model (after retraining)
+    /reload          — hot-reload the NLU model (after retraining)
 """
 
 from __future__ import annotations
 
 import logging
-import sys
+import os
 import time
 
 # Suppress noisy library logs during the demo
@@ -47,24 +50,26 @@ BANNER = r"""
 
 def main() -> None:
     print(BANNER)
-    print("  Loading the AI model (this takes ~30 seconds on first run)...\n")
+    print("  Loading the search pipeline...\n")
 
-    # Import here so the banner shows before the slow model load
+    # Import here so the banner shows before the slow imports
     from ai.inference.generate_response import generate_response
-    from ai.inference.load_model import get_model, reload_model
+    from ai.inference.load_model import ModelUnavailableError, get_model, is_model_available, reload_model
+    from ai.nlu.query_parser import cache_clear, parse_query
     from ai.rag.retriever import search
 
-    # Trigger the model load now so it's cached for the first query
-    t0 = time.time()
-    try:
-        get_model()
-    except Exception as e:
-        print(f"\n  [ERROR] Failed to load model: {e}")
-        print("  Make sure the adapter is at: ai/finetune/adapters/reality-ai-lora/")
-        sys.exit(1)
-
-    load_time = time.time() - t0
-    print(f"  ✓ Model loaded in {load_time:.1f}s\n")
+    backend = os.getenv("NLU_BACKEND", "hybrid")
+    if backend != "rules" and is_model_available():
+        # Load the NLU model now so the first message isn't slow.
+        t0 = time.time()
+        try:
+            get_model()
+            print(f"  ✓ NLU model loaded in {time.time() - t0:.1f}s (backend: {backend})\n")
+        except ModelUnavailableError as e:
+            print(f"  ! NLU model unavailable, using rules-based parsing: {e}\n")
+    else:
+        print(f"  ✓ Using rules-based query parsing (backend: {backend}; "
+              "no GPU/adapter or NLU_BACKEND=rules)\n")
     print("─" * 70)
 
     history: list[dict] = []
@@ -105,18 +110,25 @@ def main() -> None:
                         price_str = f"Rs.{price:,.0f}"
                     else:
                         price_str = "N/A"
-                    print(f"    {i}. {l['title']}  ({price_str}, score: {l['distance_score']:.4f})")
+                    print(f"    {i}. {l['title']}  ({price_str}, score: {l['distance_score']:.4f}, "
+                          f"{l.get('match_note', 'exact')})")
             continue
 
         if user_input.lower() == "/reload":
-            print("  Reloading model...")
+            print("  Reloading NLU model...")
             reload_model()
-            get_model()
-            print("  ✓ Model reloaded.")
+            cache_clear()
+            try:
+                get_model()
+                print("  ✓ NLU model reloaded.")
+            except ModelUnavailableError as e:
+                print(f"  ! NLU model unavailable, using rules: {e}")
             continue
 
         # ── RAG Pipeline ─────────────────────────────────────────────
-        # Step 1: Retrieve
+        # Step 1: Understand + retrieve (search() parses the query internally;
+        # parse_query is cached, so calling it here too costs nothing extra)
+        parsed = parse_query(user_input)
         t_retrieval = time.time()
         try:
             listings = search(user_input, top_k=5)
@@ -137,7 +149,8 @@ def main() -> None:
 
         # Step 4: Display
         print(f"\n  Assistant: {reply}")
-        print(f"\n  ┌─ retrieval: {retrieval_ms:.0f}ms ({len(listings)} listings) │ generation: {gen_ms:.0f}ms ─┐")
+        print(f"\n  ┌─ understood ({parsed.source}): {parsed.describe()}")
+        print(f"  └─ retrieval: {retrieval_ms:.0f}ms ({len(listings)} listings) │ reply: {gen_ms:.0f}ms")
 
 
 if __name__ == "__main__":

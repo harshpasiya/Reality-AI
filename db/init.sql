@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS listings (
     description  TEXT,
     price        NUMERIC(12, 2),
     property_type TEXT CHECK (property_type IN ('flat', 'house_land')),
+    -- Local-test only: bedroom count for the retriever's BHK filter (NULL for
+    -- plots). Person 2's real schema exposes bedrooms through the `rooms` JSON
+    -- field instead; the mapping happens at merge time.
+    bhk          INTEGER,
     lat          DOUBLE PRECISION NOT NULL,
     lng          DOUBLE PRECISION NOT NULL,
     embedding    vector(384),
@@ -35,10 +39,10 @@ CREATE TABLE IF NOT EXISTS listings (
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index for cosine-distance similarity search (used by rag/retriever.py)
--- Created as CONCURRENTLY would fail inside a transaction; plain CREATE INDEX
--- is safe here since the table is empty on first init.
-CREATE INDEX IF NOT EXISTS listings_embedding_idx
-    ON listings
-    USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 10);
+-- No vector index on purpose. At a few hundred rows an exact scan takes well
+-- under a millisecond. The IVFFlat index that used to be here was (a) built on
+-- an empty table, so its clusters were meaningless, (b) built for cosine
+-- distance while the retriever orders by <-> (L2), and (c) approximate indexes
+-- apply WHERE filters AFTER the index scan, so price/BHK/locality filters
+-- could silently return fewer than top_k rows. Revisit (HNSW + pgvector
+-- iterative scans) only at real production scale — see Prompt 5.1.
