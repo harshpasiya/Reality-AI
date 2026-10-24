@@ -291,6 +291,14 @@ def resolve_place(text: str) -> tuple[str, dict[str, Any]] | None:
     return best[1], dict(best[2])
 
 
+def surface_forms(canonical: str) -> set[str]:
+    """Lowercase canonical name plus aliases of a place; empty set if unknown."""
+    data = LOCALITIES.get(canonical) or LANDMARKS.get(canonical)
+    if data is None:
+        return set()
+    return {canonical.lower(), *(a.lower() for a in data["aliases"])}
+
+
 def get_place(canonical: str) -> dict[str, Any] | None:
     """Look up a canonical locality or landmark name (exact, case-sensitive)."""
     data = LOCALITIES.get(canonical) or LANDMARKS.get(canonical)

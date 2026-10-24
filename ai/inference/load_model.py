@@ -131,7 +131,18 @@ def _load(adapter_dir: Path) -> tuple["PreTrainedModel", "PreTrainedTokenizerBas
     t0 = time.time()
     # The adapter folder carries the tokenizer saved at training time, so the
     # chat template is byte-identical to the one the model was trained with.
-    tokenizer = AutoTokenizer.from_pretrained(str(adapter_dir))
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(str(adapter_dir))
+    except Exception as exc:
+        # An adapter saved by transformers 5.x (Kaggle) writes tokenizer_config.json
+        # in a format 4.x can't read (extra_special_tokens as a list). The tokenizer
+        # is the base model's, so load it from there and keep the saved template.
+        logger.warning("Adapter tokenizer unreadable (%s); using %s's tokenizer.",
+                       type(exc).__name__, base)
+        tokenizer = AutoTokenizer.from_pretrained(base)
+        template = adapter_dir / "chat_template.jinja"
+        if template.is_file():
+            tokenizer.chat_template = template.read_text(encoding="utf-8")
     tokenizer.padding_side = "right"
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token

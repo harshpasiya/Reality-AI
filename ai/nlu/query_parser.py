@@ -5,9 +5,13 @@
 Backends (env var NLU_BACKEND):
   hybrid (default) — run the rules parser and the fine-tuned model, then merge:
       prices from rules when rules found one (regex arithmetic is exact and
-      tested), everything else from the model. If the model says "not a
-      property query" while rules found two or more property signals, rules
-      win. If the model is unavailable or its output is invalid, rules alone.
+      tested); bhk, locality and property type from the model, falling back
+      to rules where the model left a field empty; keywords from both. The
+      model's locality is kept only if the query text supports it (fuzzy
+      match against the place's names), so an invented place can't silently
+      filter results. If the model says "not a property query" while rules
+      found two or more property signals, rules win. If the model is
+      unavailable or its output is invalid, rules alone.
   rules  — rules parser only (what runs on machines without a GPU).
   model  — the model's validated output as-is, no merge (for fair evaluation);
       still falls back to rules if the model is unavailable or invalid.
@@ -27,6 +31,9 @@ import time
 from dataclasses import replace
 from typing import Any
 
+from rapidfuzz import fuzz
+
+from ai.nlu.gazetteer import surface_forms
 from ai.nlu.prompt import NLU_SYSTEM_PROMPT
 from ai.nlu.rules import parse_with_rules
 from ai.nlu.schema import ParsedQuery, extract_first_json, validate_model_output
@@ -40,6 +47,10 @@ _DEFAULT_BACKEND = "hybrid"
 MAX_QUERY_CHARS = 500
 MAX_NEW_TOKENS = 160      # the JSON is ~60-90 tokens
 _RULES_OVERRIDE_SIGNALS = 2
+# rapidfuzz partial_ratio of a place's name/alias against the query. On the eval
+# set every correct locality scores >= 86 ("vr mal"); "villas batavo" -> Bhatar
+# (a model hallucination) scores 67.
+_LOCALITY_GROUNDING_MIN = 80
 
 # One generate() at a time: the backend may call from several worker threads,
 # and concurrent generation on one small GPU only adds memory pressure.
@@ -121,6 +132,13 @@ def _signal_count(pq: ParsedQuery) -> int:
     ))
 
 
+def _locality_grounded(locality: str, query: str) -> bool:
+    """True if some name or alias of *locality* (fuzzily) appears in *query*."""
+    text = query.lower()
+    return any(fuzz.partial_ratio(surface, text) >= _LOCALITY_GROUNDING_MIN
+               for surface in surface_forms(locality))
+
+
 def merge(rules: ParsedQuery, model: ParsedQuery, query: str = "") -> ParsedQuery:
     """Hybrid merge of a rules parse and a validated model parse (see module docstring)."""
     if not model.is_property_query:
@@ -130,15 +148,21 @@ def merge(rules: ParsedQuery, model: ParsedQuery, query: str = "") -> ParsedQuer
             return replace(rules, source="hybrid")
         return ParsedQuery(is_property_query=False, source="hybrid")
 
+    locality = model.locality
+    if locality is not None and query and locality != rules.locality \
+            and not _locality_grounded(locality, query):
+        logger.info("Dropping model locality %r: not found in query=%r", locality, query[:80])
+        locality = None
+
     rules_has_price = rules.price_min is not None or rules.price_max is not None
     return ParsedQuery(
         is_property_query=True,
-        bhk=model.bhk,
-        locality=model.locality,
+        bhk=model.bhk if model.bhk is not None else rules.bhk,
+        locality=locality if locality is not None else rules.locality,
         price_min=rules.price_min if rules_has_price else model.price_min,
         price_max=rules.price_max if rules_has_price else model.price_max,
-        property_type=model.property_type,
-        keywords=model.keywords,
+        property_type=model.property_type or rules.property_type,
+        keywords=tuple(dict.fromkeys(model.keywords + rules.keywords)),
         source="hybrid",
     )
 

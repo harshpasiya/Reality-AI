@@ -1,0 +1,334 @@
+{
+  "name": "qwen3-4b-model",
+  "eval_file": "ai\\nlu\\eval_set.jsonl",
+  "n_rows": 150,
+  "n_evaluated": 150,
+  "bad_rows": [],
+  "field_accuracy": {
+    "is_property_query": 1.0,
+    "bhk": 1.0,
+    "locality": 0.9866666666666667,
+    "property_type": 1.0,
+    "price_min": 1.0,
+    "price_max": 1.0,
+    "keywords": 0.98
+  },
+  "keywords_f1": 0.968421052631579,
+  "exact_match": 0.9666666666666667,
+  "model_output_valid_rate": 1.0,
+  "latency_ms": {
+    "mean": 8286.473754663797,
+    "median": 7917.291600024328,
+    "p95": 10299.24750002101
+  },
+  "by_tag": {
+    "approx": {
+      "n": 6,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "edge-case": {
+      "n": 5,
+      "exact_match": 0.8,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 0.8
+    },
+    "gujarati": {
+      "n": 14,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "hinglish": {
+      "n": 18,
+      "exact_match": 0.8888888888888888,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 0.9444444444444444,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 0.9444444444444444
+    },
+    "keywords": {
+      "n": 14,
+      "exact_match": 0.9285714285714286,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 0.9285714285714286
+    },
+    "landmark": {
+      "n": 10,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "no-filters": {
+      "n": 6,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "normal": {
+      "n": 18,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "offtopic": {
+      "n": 12,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "price-max": {
+      "n": 6,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "price-min": {
+      "n": 6,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "price-only": {
+      "n": 5,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "price-range": {
+      "n": 6,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "property-type": {
+      "n": 10,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "typo": {
+      "n": 14,
+      "exact_match": 0.9285714285714286,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 0.9285714285714286,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    }
+  },
+  "worst_failures": [
+    {
+      "line": 58,
+      "query": "varachha me new construction flat hai koi 45 lakh tak",
+      "tag": "hinglish",
+      "wrong": [
+        "keywords"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Varachha",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": 4500000.0,
+        "keywords": [
+          "new construction"
+        ]
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Varachha",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": 4500000.0,
+        "keywords": []
+      },
+      "source": "model"
+    },
+    {
+      "line": 63,
+      "query": "rander me 2bhk flat dikhao",
+      "tag": "hinglish",
+      "wrong": [
+        "locality"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": 2,
+        "locality": "Rander",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": 2,
+        "locality": null,
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "model"
+    },
+    {
+      "line": 91,
+      "query": "flat near dumas bech 1 cr",
+      "tag": "typo",
+      "wrong": [
+        "locality"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Dumas Beach",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": 10000000.0,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Dumas",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": 10000000.0,
+        "keywords": []
+      },
+      "source": "model"
+    },
+    {
+      "line": 127,
+      "query": "new project in jahangirpura with 2bhk",
+      "tag": "keywords",
+      "wrong": [
+        "keywords"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": 2,
+        "locality": "Jahangirpura",
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": [
+          "new construction"
+        ]
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": 2,
+        "locality": "Jahangirpura",
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "model"
+    },
+    {
+      "line": 148,
+      "query": "big family flat in vesu under 1.2 cr",
+      "tag": "edge-case",
+      "wrong": [
+        "keywords"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Vesu",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": 12000000.0,
+        "keywords": [
+          "spacious"
+        ]
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Vesu",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": 12000000.0,
+        "keywords": []
+      },
+      "source": "model"
+    }
+  ]
+}

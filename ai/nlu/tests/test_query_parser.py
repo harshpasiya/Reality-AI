@@ -153,6 +153,34 @@ def test_merge_function_directly() -> None:
     assert merge(rules, model) == ParsedQuery(True, 3, "Vesu", 50 * L, None, None, ("lift",), "hybrid")
 
 
+def test_hybrid_fills_model_gaps_from_rules(fake_model) -> None:
+    # Eval-set failure: the 4B model left locality empty on a Hinglish query.
+    fake_model.output = _model_json(bhk=2, property_type="flat")
+    pq = parse_query("rander me 2bhk flat dikhao")
+    assert (pq.bhk, pq.locality, pq.property_type) == (2, "Rander", "flat")
+
+
+def test_hybrid_unions_keywords(fake_model) -> None:
+    # Eval-set failure: the model missed "new construction"; rules found it.
+    fake_model.output = _model_json(locality="Varachha", property_type="flat", keywords=["parking"])
+    pq = parse_query("varachha me new construction flat with parking 45 lakh tak")
+    assert set(pq.keywords) == {"parking", "new construction"}
+    assert pq.keywords[0] == "parking"  # model's keywords first, no duplicates
+    assert len(pq.keywords) == len(set(pq.keywords))
+
+
+def test_hybrid_drops_hallucinated_locality(fake_model) -> None:
+    # Kaggle val failure: "batavo" (Gujarati for "show") read as Bhatar.
+    fake_model.output = _model_json(locality="Bhatar", property_type="house_land")
+    pq = parse_query("villas batavo")
+    assert pq.locality is None and pq.property_type == "house_land"
+
+
+def test_hybrid_keeps_misspelled_but_grounded_locality(fake_model) -> None:
+    fake_model.output = _model_json(locality="Jahangirpura")
+    assert parse_query("1bhk in jhangirpura").locality == "Jahangirpura"
+
+
 # ── caching ────────────────────────────────────────────────────────────────
 
 def test_cache_runs_model_once_per_query(fake_model) -> None:
