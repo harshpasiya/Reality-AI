@@ -51,7 +51,7 @@
 > A PostgreSQL extension that adds vector data types and similarity operators. We store 384-dimensional vectors next to the normal columns (title, price, location) and order results with `<->`, the Euclidean-distance operator.
 
 **Q: What index do you use for vector search?**
-> None, on purpose. At our scale (~200 listings) an exact scan takes milliseconds (median 17 ms for the whole retrieval step in our pipeline run). We first used an IVFFlat index but removed it: an approximate index returns its nearest rows first and the SQL filters (price, BHK, area) can then discard most of them, leaving fewer than 5 results. With thousands of listings we would add an HNSW index with pgvector's iterative scan.
+> None, on purpose. At our scale (~200 listings) an exact scan takes milliseconds (median 12 ms for the whole retrieval step in our pipeline run). We first used an IVFFlat index but removed it: an approximate index returns its nearest rows first and the SQL filters (price, BHK, area) can then discard most of them, leaving fewer than 5 results. With thousands of listings we would add an HNSW index with pgvector's iterative scan.
 
 **Q: How does `retriever.search()` work step by step?**
 > 1. Validate the query (non-empty) and `top_k` (positive, capped at 50)
@@ -159,7 +159,7 @@
 > Greedy decoding (`do_sample=False`), at most 160 new tokens. The output must be a precise JSON object, so there is no reason for randomness; the same message always gives the same filters.
 
 **Q: How fast is it?**
-> Measured on the RTX 3050 (4 GB): parsing with the model takes a median of ~8 s per message; retrieval 17 ms median; the reply 0.1 ms. The backend calls `search()` first, so the listings can go to the map as soon as they are ready. Rules-only parsing takes under 2 ms.
+> Measured on the RTX 3050 (4 GB): parsing with the model takes a median of ~7 s per message (8 s mean); retrieval 12 ms median; the reply under 0.2 ms. The backend calls `search()` first, so the listings can go to the map as soon as they are ready. Rules-only parsing takes under 2 ms.
 
 ---
 

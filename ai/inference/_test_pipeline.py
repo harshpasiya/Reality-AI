@@ -1,4 +1,4 @@
-"""End-to-end manual review: parse -> retrieve -> templated reply, for 25 queries.
+"""End-to-end manual review: parse -> retrieve -> templated reply, for 26 queries.
 
 Not an automated pass/fail test — read the output. Needs the local Docker DB
 seeded and embedded (see the top of ai/embeddings/_test_seed.py).
@@ -79,7 +79,8 @@ def main() -> None:
         t0 = time.perf_counter()
         parsed = parse_query(query)
         timings["parse"].append((time.perf_counter() - t0) * 1000)
-        if args.backend != "rules" and parsed.source == "rules":
+        # An empty message never reaches the model, so it isn't a fallback.
+        if args.backend != "rules" and query.strip() and parsed.source == "rules":
             rules_fallbacks += 1
         print(f"  parsed ({parsed.source}): {parsed.describe()}")
 
@@ -111,8 +112,9 @@ def main() -> None:
         print(f"  {stage:<9} mean {statistics.fmean(values):7.1f} ms | median {statistics.median(values):7.1f} ms"
               f" | p95 {_p95(values):7.1f} ms")
     if args.backend != "rules":
-        print(f"  parser fell back to rules on {rules_fallbacks} of {len(QUERIES)} queries"
-              " (all of them = model unavailable; see the WARNING above)")
+        asked = sum(1 for _, q in QUERIES if q.strip())
+        print(f"  parser fell back to rules on {rules_fallbacks} of {asked} non-empty queries"
+              " (model unavailable or invalid model output; see any WARNING/INFO above)")
     print("  (the first 'parse' timing of a model backend includes loading the model)")
 
 

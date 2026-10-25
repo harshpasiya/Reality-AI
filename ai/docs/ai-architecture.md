@@ -208,16 +208,17 @@ the locality Dumas instead of the landmark Dumas Beach, so the search still
 covers the right area.
 
 **End-to-end pipeline** (`ai/inference/_test_pipeline.py`, 26 queries, hybrid,
-local database), per stage:
+local database with 210 seeded listings), per stage:
 
 | Stage | Mean | Median | p95 |
 |---|---|---|---|
-| Parse | 10,667 ms | 9,357 ms | 12,594 ms |
-| Retrieve (SQL + pgvector) | 30.6 ms | 16.9 ms | 139.5 ms |
-| Reply | 0.2 ms | 0.1 ms | 0.2 ms |
+| Parse | 8,013 ms | 7,165 ms | 9,492 ms |
+| Retrieve (SQL + pgvector) | 20.6 ms | 11.9 ms | 100.1 ms |
+| Reply | 0.1 ms | 0.0 ms | 0.2 ms |
 
-The first parse includes loading the model. One of the 26 queries fell back
-to rules.
+The first parse includes loading the model. The model handled every
+non-empty query; the one rules result is the empty message, which is
+answered without calling the model.
 
 **Model load time and GPU memory on the RTX 3050** are measured by
 `python -m ai.nlu.run_all_evals` and written to `ai/docs/nlu-eval-runtime.json`;
