@@ -10,6 +10,7 @@ heuristic, price formatting, and amenity summaries.
 from __future__ import annotations
 
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,11 @@ _AMENITY_KEYWORDS = (
     "around the area", "in the vicinity", "what's around", "whats around",
     "surrounding area", "neighbourhood", "neighborhood", "amenities",
     "facilities", "convenient to", "how far", "distance to",
+)
+# Whole words only: a plain substring test made "parking" match "park" and
+# showed amenities for every "flat with parking" query.
+_AMENITY_RE = re.compile(
+    r"(?<![a-z])(?:" + "|".join(re.escape(kw) for kw in _AMENITY_KEYWORDS) + r")(?![a-z])"
 )
 
 
@@ -46,8 +52,7 @@ def is_amenity_related(query: str) -> bool:
     """
     if not query:
         return False
-    lowered = query.lower()
-    return any(kw in lowered for kw in _AMENITY_KEYWORDS)
+    return _AMENITY_RE.search(query.lower()) is not None
 
 
 def _format_price(price: float | None) -> str:

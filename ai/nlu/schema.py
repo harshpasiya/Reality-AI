@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -30,6 +31,9 @@ PropertyType = Literal["flat", "house_land"]
 Source = Literal["model", "rules", "hybrid"]
 
 _UNIT_MULTIPLIER: dict[str, int] = {"lakh": 1_00_000, "crore": 1_00_00_000, "rupee": 1}
+# Upper sanity bound for any parsed price (Rs.1,000 crore). Anything above is a
+# typo or garbage, and would silently disable the budget filter.
+MAX_PRICE_RUPEES: float = 1_000 * 1_00_00_000
 _PROPERTY_TYPES = ("flat", "house_land")
 _BHK_MIN, _BHK_MAX = 1, 10
 
@@ -66,6 +70,17 @@ def to_rupees(price: RawPrice | dict[str, Any]) -> float:
     if unit not in _UNIT_MULTIPLIER:
         raise ValueError(f"unknown price unit {unit!r}")
     return float(amount) * _UNIT_MULTIPLIER[unit]
+
+
+def is_sane_price(price: RawPrice) -> bool:
+    """True if *price* is finite, positive and at most MAX_PRICE_RUPEES.
+
+    JSON allows NaN/Infinity, and PostgreSQL sorts NaN above every number, so
+    an unchecked "price_max": NaN would match every listing.
+    """
+    if not math.isfinite(price.amount) or price.amount <= 0:
+        return False
+    return to_rupees(price) <= MAX_PRICE_RUPEES
 
 
 @dataclass(frozen=True)
@@ -141,9 +156,10 @@ def _parse_raw_price(value: Any) -> RawPrice | None | Literal[False]:
     amount, unit = value.get("amount"), value.get("unit")
     if isinstance(amount, bool) or not isinstance(amount, (int, float)):
         return False
-    if unit not in _UNIT_MULTIPLIER or amount <= 0:
+    if unit not in _UNIT_MULTIPLIER:
         return False
-    return RawPrice(amount=float(amount), unit=unit)
+    price = RawPrice(amount=float(amount), unit=unit)
+    return price if is_sane_price(price) else False
 
 
 def validate_model_output(obj: Any) -> ParsedQuery | None:
@@ -159,8 +175,8 @@ def validate_model_output(obj: Any) -> ParsedQuery | None:
       - bhk outside 1-10 -> None
       - locality that doesn't resolve via the gazetteer -> None
       - property_type other than "flat"/"house_land" -> None
-      - non-positive price, unknown unit, or price_min > price_max -> both
-        prices dropped
+      - non-positive, non-finite or absurd (> Rs.1,000 crore) price, unknown
+        unit, or price_min > price_max -> both prices dropped
       - keywords mapped through synonyms and filtered to KEYWORD_VOCAB,
         deduplicated in order
     If is_property_query is False every other field is forced empty.

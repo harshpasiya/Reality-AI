@@ -145,3 +145,31 @@ def test_db_error_becomes_retrieval_error(monkeypatch) -> None:
     monkeypatch.setattr(retriever, "_engine", Broken())
     with pytest.raises(retriever.RetrievalError):
         retriever.search("2bhk in vesu")
+
+
+def test_non_integer_candidate_ids_rejected(monkeypatch) -> None:
+    engine = _install(monkeypatch, [])
+    with pytest.raises(ValueError):
+        retriever.search("2bhk in vesu", candidate_ids=["1; DROP TABLE listings"])
+    with pytest.raises(ValueError):
+        retriever.search("2bhk in vesu", candidate_ids=[True])
+    assert engine.calls == []
+
+
+def test_embedding_failure_becomes_retrieval_error(monkeypatch) -> None:
+    _install(monkeypatch, [])
+
+    def broken(text):
+        raise RuntimeError("CUDA out of memory")
+
+    monkeypatch.setattr(retriever._embedding_model, "embed", broken)
+    with pytest.raises(retriever.RetrievalError):
+        retriever.search("2bhk in vesu")
+
+
+def test_query_is_capped_before_embedding(monkeypatch) -> None:
+    _install(monkeypatch, [[_row(1)]])
+    seen: list[str] = []
+    monkeypatch.setattr(retriever._embedding_model, "embed", lambda text: seen.append(text) or [0.1])
+    retriever.search("2bhk in vesu " + "x" * 10_000)
+    assert len(seen[0]) <= retriever.MAX_QUERY_CHARS

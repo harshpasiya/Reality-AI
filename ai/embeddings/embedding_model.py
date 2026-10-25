@@ -130,8 +130,8 @@ class EmbeddingModel:
         """Embed a single piece of text into a normalised float vector.
 
         The vector is L2-normalised (``normalize_embeddings=True``) so that
-        cosine similarity is equivalent to a dot product — required for
-        pgvector's ``<=>`` cosine-distance operator to work correctly.
+        Euclidean distance ranks exactly like cosine distance — the retriever
+        orders by pgvector's ``<->`` (L2) operator and relies on this.
 
         Args:
             text: The text to embed.  Must be a non-empty string after

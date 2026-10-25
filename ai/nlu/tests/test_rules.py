@@ -137,3 +137,8 @@ def test_extract_prices_keeps_units_as_written() -> None:
 
 def test_inverted_explicit_prices_dropped() -> None:
     assert extract_prices("above 1 crore and under 50 lakh") == (None, None)
+
+
+@pytest.mark.parametrize("query", ["flat under 0 lakh", "2bhk 99999999999999999999 lakh"])
+def test_zero_or_absurd_prices_ignored(query) -> None:
+    assert extract_prices(query) == (None, None)

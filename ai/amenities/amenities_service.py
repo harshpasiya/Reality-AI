@@ -106,21 +106,18 @@ def _get_existing_amenities(listing_id: int) -> dict | None:
     return row[0] if isinstance(row[0], dict) else json.loads(row[0])
 
 
-def _fetch_category(lat: float, lng: float, place_type: str) -> list[dict]:
-    """Query Google Places Nearby Search for one category. Never raises for
-    ordinary "no results" or API-level errors \u2014 returns [] instead, so one
-    failing category doesn't take down the whole fetch_and_cache() call.
-    """
-    api_key = os.environ.get(_PLACES_API_KEY_ENV)
-    if not api_key:
-        logger.error(
-            "%s is not set \u2014 skipping amenities fetch entirely. "
-            "Amenities caching will silently produce empty results until "
-            "this is configured.",
-            _PLACES_API_KEY_ENV,
-        )
-        return []
+def _redact(message: object, api_key: str) -> str:
+    """str(message) with the API key removed. requests puts the full URL,
+    including ?key=..., into its exception messages, which end up in logs."""
+    return str(message).replace(api_key, "<redacted>") if api_key else str(message)
 
+
+def _fetch_category(lat: float, lng: float, place_type: str, api_key: str) -> list[dict] | None:
+    """Query Google Places Nearby Search for one category. Never raises.
+
+    Returns the raw results ([] for a genuine ZERO_RESULTS), or None when the
+    request failed, so the caller can avoid caching a failure as "no amenities".
+    """
     params = {
         "location": f"{lat},{lng}",
         "radius": _SEARCH_RADIUS_M,
@@ -134,7 +131,7 @@ def _fetch_category(lat: float, lng: float, place_type: str) -> list[dict]:
         except requests.RequestException as e:
             logger.warning(
                 "Places API request failed (attempt %d/%d) for type=%s: %s",
-                attempt, _MAX_RETRIES, place_type, e,
+                attempt, _MAX_RETRIES, place_type, _redact(e, api_key),
             )
             time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
             continue
@@ -147,7 +144,13 @@ def _fetch_category(lat: float, lng: float, place_type: str) -> list[dict]:
             time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
             continue
 
-        body = resp.json()
+        try:
+            body = resp.json()
+        except ValueError:
+            logger.warning("Places API returned a non-JSON body for type=%s (attempt %d/%d)",
+                           place_type, attempt, _MAX_RETRIES)
+            time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
+            continue
         status = body.get("status")
 
         if status == "OK":
@@ -165,15 +168,16 @@ def _fetch_category(lat: float, lng: float, place_type: str) -> list[dict]:
         # REQUEST_DENIED, INVALID_REQUEST, etc. \u2014 retrying won't help.
         logger.warning(
             "Places API status=%s for type=%s \u2014 not retrying (%s)",
-            status, place_type, body.get("error_message", "no error_message"),
+            status, place_type,
+            _redact(body.get("error_message", "no error_message"), api_key),
         )
-        return []
+        return None
 
     logger.warning(
-        "Places API gave up after %d attempts for type=%s \u2014 treating as empty.",
+        "Places API gave up after %d attempts for type=%s.",
         _MAX_RETRIES, place_type,
     )
-    return []
+    return None
 
 
 def _format_places(raw_results: list[dict], origin_lat: float, origin_lng: float) -> list[dict]:
@@ -211,6 +215,10 @@ def fetch_and_cache(listing_id: int, force: bool = False) -> None:
             listing's location is edited \u2014 see the note on the Listing
             model about this).
 
+    Nothing is written when the API key is missing or any category's request
+    fails, so the listing is retried on the next run rather than cached as
+    having no amenities.
+
     Raises:
         ListingNotFoundError: If listing_id doesn't exist.
     """
@@ -222,11 +230,30 @@ def fetch_and_cache(listing_id: int, force: bool = False) -> None:
             logger.debug("Listing %d already has cached amenities \u2014 skipping (force=False).", listing_id)
             return
 
+    api_key = os.environ.get(_PLACES_API_KEY_ENV)
+    if not api_key:
+        # Don't cache anything: an empty cache would look "done" and this
+        # listing would never be fetched again once the key is configured.
+        logger.error("%s is not set — amenities for listing %d not fetched.",
+                     _PLACES_API_KEY_ENV, listing_id)
+        return
+
     try:
         amenities: dict[str, list[dict]] = {}
+        failed: list[str] = []
         for category, place_type in _CATEGORIES.items():
-            raw_results = _fetch_category(lat, lng, place_type)
+            raw_results = _fetch_category(lat, lng, place_type, api_key)
+            if raw_results is None:
+                failed.append(category)
+                continue
             amenities[category] = _format_places(raw_results, lat, lng)
+
+        if failed:
+            # Leave the column as it was (usually NULL) so a later run retries,
+            # instead of caching a failure as "no amenities nearby".
+            logger.warning("Amenities for listing %d not cached: Places API failed for %s.",
+                           listing_id, ", ".join(failed))
+            return
 
         with _engine.begin() as conn:
             conn.execute(

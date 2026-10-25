@@ -60,19 +60,19 @@ NEIGHBOURHOODS = [
     {"name": "Citylight",      "lat": 21.1724, "lng": 72.8101, "tier": "premium"},
     {"name": "Pal",            "lat": 21.1977, "lng": 72.7742, "tier": "mid"},
     {"name": "Althan",         "lat": 21.1674, "lng": 72.8180, "tier": "mid"},
-    {"name": "Bhatar",         "lat": 21.1882, "lng": 72.8500, "tier": "mid"},
+    {"name": "Bhatar",         "lat": 21.1670, "lng": 72.8138, "tier": "mid"},
     {"name": "Ghod Dod Road",  "lat": 21.1790, "lng": 72.8198, "tier": "premium"},
     {"name": "Palanpur",       "lat": 21.2088, "lng": 72.8056, "tier": "mid"},
     {"name": "Jahangirpura",   "lat": 21.2218, "lng": 72.8289, "tier": "mid"},
     {"name": "Varachha",       "lat": 21.2197, "lng": 72.8684, "tier": "budget"},
     {"name": "Katargam",       "lat": 21.2377, "lng": 72.8428, "tier": "budget"},
-    {"name": "Udhna",          "lat": 21.2120, "lng": 72.8400, "tier": "budget"},
+    {"name": "Udhna",          "lat": 21.1688, "lng": 72.8447, "tier": "budget"},
     {"name": "Dumas",          "lat": 21.0977, "lng": 72.7166, "tier": "premium"},
     {"name": "Sarthana",       "lat": 21.2356, "lng": 72.8741, "tier": "budget"},
     {"name": "Rander",         "lat": 21.2360, "lng": 72.7669, "tier": "mid"},
     {"name": "Sachin",         "lat": 21.0862, "lng": 72.8641, "tier": "budget"},
-    {"name": "Puna Kumbharia", "lat": 21.2551, "lng": 72.8211, "tier": "budget"},
-    {"name": "Kapodra",        "lat": 21.2282, "lng": 72.8059, "tier": "budget"},
+    {"name": "Puna Kumbharia", "lat": 21.1995, "lng": 72.8642, "tier": "budget"},
+    {"name": "Kapodra",        "lat": 21.2212, "lng": 72.8746, "tier": "budget"},
 ]
 
 # ---------------------------------------------------------------------------

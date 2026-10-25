@@ -225,10 +225,13 @@
 > After writing amenities to the DB, `fetch_and_cache()` calls `embed_single(listing_id)`. This re-runs `build_listing_text()`, which now includes an amenities paragraph like "Nearby amenities include 2 schools (highest rated: Sunrise Public School, 4.3 stars), 1 hospital...". The new embedding captures this, making queries like "flat near a good school" actually retrieve relevant results.
 
 **Q: What if the API key is missing?**
-> `_fetch_category()` logs an ERROR and returns `[]` for every category. The listing gets empty amenities but doesn't crash. The whole system still works — just without amenity data.
+> `fetch_and_cache()` logs an ERROR and writes nothing, so the `amenities` column stays NULL and the listing is fetched once the key is configured. The rest of the system works normally, just without amenity data.
 
-**Q: How do you handle API rate limiting?**
-> Exponential backoff: up to 3 retries with `2 × attempt` second delays. If still failing, the category is treated as empty. `fetch_and_cache_all_missing()` adds a 0.2-second delay between listings during batch processing.
+**Q: How do you handle API rate limiting and failures?**
+> Linear backoff: up to 3 tries per category with `2 × attempt` second delays. If a category still fails, nothing is cached for that listing, so a later run retries it instead of storing "no amenities". A genuine `ZERO_RESULTS` is cached as an empty list. `fetch_and_cache_all_missing()` adds a 0.2-second delay between listings during batch processing.
+
+**Q: Can the API key leak into logs?**
+> No. Error messages from `requests` contain the full request URL including `key=…`; every logged message is passed through `_redact()`, which replaces the key with `<redacted>`.
 
 ---
 

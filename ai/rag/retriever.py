@@ -40,6 +40,7 @@ adapter at merge.
 from __future__ import annotations
 
 import logging
+import numbers
 import os
 from dataclasses import dataclass, replace
 from typing import Any
@@ -50,7 +51,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ai.embeddings.embedding_model import EmbeddingModel
 from ai.nlu.gazetteer import get_place
-from ai.nlu.query_parser import parse_query
+from ai.nlu.query_parser import MAX_QUERY_CHARS, parse_query
 from ai.nlu.schema import ParsedQuery
 
 load_dotenv()
@@ -151,7 +152,7 @@ def filters_from_parsed(parsed: ParsedQuery, candidate_ids: list[int] | None) ->
         lat=place["lat"] if place else None,
         lng=place["lng"] if place else None,
         radius_m=float(place["radius_m"]) if place else None,
-        candidate_ids=tuple(candidate_ids) if candidate_ids is not None else None,
+        candidate_ids=tuple(int(i) for i in candidate_ids) if candidate_ids is not None else None,
     )
 
 
@@ -260,9 +261,9 @@ def search(
         or "relaxed_locality"). Off-topic queries return ``[]``.
 
     Raises:
-        ValueError: If *query* is empty after stripping, or *top_k* is not a
-            positive integer.
-        RetrievalError: If the database query fails for any reason.
+        ValueError: If *query* is empty after stripping, *top_k* is not a
+            positive integer, or *candidate_ids* holds a non-integer.
+        RetrievalError: If embedding the query or the database query fails.
     """
     # ── 1. Validate input ──────────────────────────────────────────────────
     if not isinstance(query, str) or not query.strip():
@@ -275,9 +276,12 @@ def search(
         logger.warning("top_k=%d exceeds maximum (%d); clamping.", top_k, _MAX_TOP_K)
         top_k = _MAX_TOP_K
 
-    if candidate_ids is not None and len(candidate_ids) == 0:
-        logger.debug("candidate_ids is an empty list — returning [] without querying DB.")
-        return []
+    if candidate_ids is not None:
+        if any(isinstance(i, bool) or not isinstance(i, numbers.Integral) for i in candidate_ids):
+            raise ValueError("candidate_ids must be a list of integer listing IDs.")
+        if len(candidate_ids) == 0:
+            logger.debug("candidate_ids is an empty list — returning [] without querying DB.")
+            return []
 
     # ── 2. Understand the query ────────────────────────────────────────────
     parsed = parse_query(query)
@@ -286,7 +290,13 @@ def search(
         return []
 
     # ── 3. Filtered ranking with the relaxation ladder ─────────────────────
-    query_vector = _embedding_model.embed(query)
+    # Same cap as the parser: MiniLM reads only ~256 tokens anyway, and an
+    # oversized message shouldn't cost a full tokenization.
+    try:
+        query_vector = _embedding_model.embed(query[:MAX_QUERY_CHARS])
+    except Exception as exc:
+        logger.error("Query embedding failed. query=%r, error=%s", query[:80], exc)
+        raise RetrievalError(f"Embedding the query failed: {exc}") from exc
     filters = filters_from_parsed(parsed, candidate_ids)
 
     for match_note, attempt in relaxation_ladder(filters):

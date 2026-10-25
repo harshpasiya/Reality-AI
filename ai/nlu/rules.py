@@ -17,7 +17,7 @@ import re
 
 from ai.nlu.gazetteer import resolve_place
 from ai.nlu.keyword_vocab import KEYWORD_SYNONYMS, KEYWORD_VOCAB
-from ai.nlu.schema import ParsedQuery, RawPrice, to_rupees
+from ai.nlu.schema import ParsedQuery, RawPrice, is_sane_price, to_rupees
 
 # ---------------------------------------------------------------------------
 # Prices
@@ -124,7 +124,8 @@ def extract_prices(query: str) -> tuple[RawPrice | None, RawPrice | None]:
     it ("tak", "se upar", "sudhi", "thi vadhare", ...), and ranges ("between X
     and Y", "X to Y", "X-Y lakh", "X se Y", "X thi Y"). A price with no
     direction is the budget, i.e. price_max. An inverted min/max pair is
-    dropped entirely.
+    dropped entirely, and so is any single price that is zero or above
+    Rs.1,000 crore (``schema.is_sane_price``).
 
     Returns:
         (price_min, price_max); either may be None.
@@ -153,6 +154,12 @@ def extract_prices(query: str) -> tuple[RawPrice | None, RawPrice | None]:
         elif price_max is None:
             price_max = price  # bare price = budget
 
+    # "0 lakh" or a 20-digit number is not a budget; drop it rather than
+    # filter on it.
+    if price_min is not None and not is_sane_price(price_min):
+        price_min = None
+    if price_max is not None and not is_sane_price(price_max):
+        price_max = None
     if price_min and price_max and to_rupees(price_min) > to_rupees(price_max):
         return None, None
     return price_min, price_max

@@ -10,6 +10,7 @@ development.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import time
 
@@ -30,6 +31,10 @@ if not _DATABASE_URL:
         "then make sure the Docker database is running (docker-compose up -d)."
     )
 _engine = create_engine(_DATABASE_URL)
+
+# A drawn boundary has tens of points; a cap stops an oversized request from
+# tying up the database.
+MAX_POLYGON_POINTS = 1000
 
 
 class BoundaryFilterError(Exception):
@@ -58,11 +63,16 @@ def get_candidates(polygon: list[list[float]]) -> list[int]:
 
     Raises:
         ValueError: If polygon has fewer than 3 distinct points (after
-            attempting to auto-close the ring).
+            attempting to auto-close the ring), more than MAX_POLYGON_POINTS
+            points, or a point that is non-numeric, non-finite or outside
+            lat -90..90 / lng -180..180. Self-intersecting polygons are
+            repaired with ST_MakeValid rather than rejected.
         BoundaryFilterError: If the database query fails.
     """
     if not polygon:
         raise ValueError("polygon must contain at least 3 points, got an empty list")
+    if len(polygon) > MAX_POLYGON_POINTS:
+        raise ValueError(f"polygon has {len(polygon)} points; the maximum is {MAX_POLYGON_POINTS}")
 
     points = list(polygon)
     if points[0] != points[-1]:
@@ -78,18 +88,26 @@ def get_candidates(polygon: list[list[float]]) -> list[int]:
     # ValueError naturally below on non-numeric input) — never
     # string-interpolated from untrusted raw text.
     try:
-        ring = ", ".join(f"{float(lng)} {float(lat)}" for lat, lng in points)
+        coords = [(float(lat), float(lng)) for lat, lng in points]
     except (TypeError, ValueError) as e:
         raise ValueError(f"polygon contains non-numeric or malformed points: {e}") from e
+    for lat, lng in coords:
+        # NaN/inf would produce invalid WKT ("nan"), and an out-of-range point
+        # is a frontend bug (often lat/lng swapped) that should surface as bad input.
+        if not (math.isfinite(lat) and math.isfinite(lng) and -90 <= lat <= 90 and -180 <= lng <= 180):
+            raise ValueError(f"polygon point ({lat}, {lng}) is not a valid [lat, lng] pair")
 
+    ring = ", ".join(f"{lng} {lat}" for lat, lng in coords)
     wkt_polygon = f"POLYGON(({ring}))"
 
+    # ST_MakeValid: a hand-drawn boundary often crosses itself (a figure-8),
+    # which makes ST_Contains raise a topology error instead of returning rows.
     sql = text(
         """
         SELECT id
         FROM listings
         WHERE ST_Contains(
-            ST_GeomFromText(:polygon_wkt, 4326),
+            ST_MakeValid(ST_GeomFromText(:polygon_wkt, 4326)),
             ST_SetSRID(ST_MakePoint(lng, lat), 4326)
         )
         """

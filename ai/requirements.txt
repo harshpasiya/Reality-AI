@@ -15,7 +15,9 @@ torch>=2.2,<3.0
 # ──────────────────────────────────────────────────────────────────────
 # HuggingFace Transformers — tokenizers, model loading, generation
 # ──────────────────────────────────────────────────────────────────────
-transformers>=4.40,<5.0
+# >= 4.51 for Qwen3. Adapters saved by 5.x (Kaggle) load too: load_model.py
+# falls back to the base model's tokenizer.
+transformers>=4.51,<5.0
 
 # ──────────────────────────────────────────────────────────────────────
 # PEFT — Parameter-Efficient Fine-Tuning (LoRA adapter creation/loading)

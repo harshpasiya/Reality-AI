@@ -173,3 +173,17 @@ def test_describe_and_is_empty() -> None:
     assert ParsedQuery(True).describe() == "property"
     assert ParsedQuery(True).is_empty()
     assert ParsedQuery(False).describe() == "not a property query"
+
+
+@pytest.mark.parametrize("amount", [float("nan"), float("inf"), 1e15, 0, -5])
+def test_non_finite_zero_or_absurd_prices_dropped(amount) -> None:
+    pq = validate_model_output({"is_property_query": True,
+                                "price_max": {"amount": amount, "unit": "lakh"}})
+    assert pq is not None and pq.price_max is None
+
+
+def test_nan_from_raw_json_text_is_dropped() -> None:
+    # json.loads accepts the non-standard literals NaN and Infinity.
+    obj = extract_first_json('{"is_property_query": true, "price_max": {"amount": NaN, "unit": "lakh"}}')
+    pq = validate_model_output(obj)
+    assert pq is not None and pq.price_max is None

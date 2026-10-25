@@ -63,7 +63,7 @@ LOCALITIES: dict[str, dict[str, Any]] = {
         "aliases": ["althan", "althaan"],
     },
     "Bhatar": {
-        "lat": 21.1882, "lng": 72.8500, "radius_m": 2000,
+        "lat": 21.1670, "lng": 72.8138, "radius_m": 2000,
         "aliases": ["bhatar", "bhataar"],
     },
     "Ghod Dod Road": {
@@ -90,7 +90,7 @@ LOCALITIES: dict[str, dict[str, Any]] = {
         "aliases": ["katargam", "katargaam"],
     },
     "Udhna": {
-        "lat": 21.2120, "lng": 72.8400, "radius_m": 1500,
+        "lat": 21.1688, "lng": 72.8447, "radius_m": 1500,
         "aliases": ["udhna", "udhana"],
     },
     "Dumas": {
@@ -110,14 +110,14 @@ LOCALITIES: dict[str, dict[str, Any]] = {
         "aliases": ["sachin"],
     },
     "Puna Kumbharia": {
-        "lat": 21.2551, "lng": 72.8211, "radius_m": 2500,
+        "lat": 21.1995, "lng": 72.8642, "radius_m": 2500,
         "aliases": [
             "puna kumbharia", "punakumbharia", "puna kumbhariya",
             "kumbharia", "kumbhariya", "puna",
         ],
     },
     "Kapodra": {
-        "lat": 21.2282, "lng": 72.8059, "radius_m": 2000,
+        "lat": 21.2212, "lng": 72.8746, "radius_m": 2000,
         "aliases": ["kapodra", "kapodara"],
     },
 }
@@ -149,7 +149,7 @@ LANDMARKS: dict[str, dict[str, Any]] = {
                    "aliases": ["canal road", "canal rd"]},
     "VIP Road": {"lat": 21.1520, "lng": 72.7900, "radius_m": 2000,  # verify on Google Maps
                  "aliases": ["vip road", "v.i.p road", "vip rd"]},
-    "Surat Municipal Market": {"lat": 21.2218, "lng": 72.8289, "radius_m": 1500,  # verify on Google Maps
+    "Surat Municipal Market": {"lat": 21.1994, "lng": 72.8144, "radius_m": 1500,
                                "aliases": ["surat municipal market", "municipal market"]},
     "Sarthana Nature Park": {"lat": 21.2328, "lng": 72.9033, "radius_m": 2000,  # verify on Google Maps
                              "aliases": ["sarthana nature park", "sarthana zoo", "nature park"]},
@@ -162,8 +162,6 @@ LANDMARKS: dict[str, dict[str, Any]] = {
                                        "l p savani"]},
     "Vesu Main Road": {"lat": 21.1490, "lng": 72.7790, "radius_m": 1500,  # verify on Google Maps
                        "aliases": ["vesu main road", "vesu main rd"]},
-    "Iscon-Ambli Road": {"lat": 21.1580, "lng": 72.7680, "radius_m": 1500,  # verify on Google Maps
-                         "aliases": ["iscon-ambli road", "iscon ambli road", "iskcon ambli road"]},
     "Athwa Gate": {"lat": 21.1880, "lng": 72.8170, "radius_m": 1500,  # verify on Google Maps
                    "aliases": ["athwa gate"]},
     "Piplod Circle": {"lat": 21.1610, "lng": 72.7990, "radius_m": 1500,  # verify on Google Maps
@@ -178,7 +176,7 @@ LANDMARKS: dict[str, dict[str, Any]] = {
                    "aliases": ["pal circle"]},
     "Althan Circle": {"lat": 21.1660, "lng": 72.8190, "radius_m": 1500,  # verify on Google Maps
                       "aliases": ["althan circle"]},
-    "Bhatar Char Rasta": {"lat": 21.1870, "lng": 72.8450, "radius_m": 1500,  # verify on Google Maps
+    "Bhatar Char Rasta": {"lat": 21.1691, "lng": 72.8139, "radius_m": 1500,
                           "aliases": ["bhatar char rasta", "bhatar char rasto", "bhatar road",
                                       "bhatar rd"]},
     "Ghod Dod Circle": {"lat": 21.1800, "lng": 72.8180, "radius_m": 1500,  # verify on Google Maps
@@ -201,6 +199,8 @@ LANDMARKS: dict[str, dict[str, Any]] = {
                     "aliases": ["hazira road", "hazira rd"]},
     "Kapodra Circle": {"lat": 21.2120, "lng": 72.8710, "radius_m": 1500,  # verify on Google Maps
                        "aliases": ["kapodra circle"]},
+    "Gaurav Path": {"lat": 21.1625, "lng": 72.7712, "radius_m": 1500,
+                    "aliases": ["gaurav path", "gaurav path road"]},
 }
 
 # Fuzzy matching is only attempted when the whole input looks like a
