@@ -1,0 +1,19 @@
+{
+  "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+  "load_seconds": 24.1,
+  "device": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "gpu_memory_after_load_gb": 2.6,
+  "gpu_total_gb": 4.0,
+  "model_latency_ms": {
+    "mean": 8159.196011327052,
+    "median": 8122.685350012034,
+    "p95": 9916.364700067788
+  },
+  "hybrid_latency_ms": {
+    "mean": 8379.270018001553,
+    "median": 8549.417400034145,
+    "p95": 10149.6591999894
+  },
+  "gpu_peak_memory_gb": 2.73
+}

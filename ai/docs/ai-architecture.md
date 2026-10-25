@@ -188,8 +188,8 @@ means all seven fields correct. Source: `ai/docs/nlu-eval-rules.md`,
 | keywords | 97.3% | 98.0% | 100.0% |
 | keywords F1 | 95.7% | 96.8% | 100.0% |
 | Valid model output | n/a | 100.0% | 100.0% |
-| Parse latency, median | 0.2 ms | 7.9 s | 8.0 s |
-| Parse latency, p95 | 1.5 ms | 10.3 s | 9.4 s |
+| Parse latency, median | 0.2 ms | 8.1 s | 8.5 s |
+| Parse latency, p95 | 1.9 ms | 9.9 s | 10.1 s |
 
 | Tag (n) | Rules | Model | Hybrid |
 |---|---|---|---|
@@ -220,9 +220,17 @@ The first parse includes loading the model. The model handled every
 non-empty query; the one rules result is the empty message, which is
 answered without calling the model.
 
-**Model load time and GPU memory on the RTX 3050** are measured by
-`python -m ai.nlu.run_all_evals` and written to `ai/docs/nlu-eval-runtime.json`;
-add them here from that file once it has been run.
+**Model footprint on the RTX 3050 Laptop GPU (4 GB)**, measured by
+`python -m ai.nlu.run_all_evals` (source: `ai/docs/nlu-eval-runtime.json`):
+
+| Measure | Value |
+|---|---|
+| Load time (base model in 4-bit + LoRA adapter, weights cached) | 24.1 s |
+| GPU memory after loading | 2.60 GB |
+| Peak GPU memory during the 300 evaluated queries | 2.73 GB |
+
+The model fits the 4 GB card with about 1.3 GB to spare, which is what
+ruled out Mistral-7B (Section 2).
 
 **Latency verdict.** About 8 s per message on a 4 GB laptop GPU is slow but
 was judged acceptable for this project, because the listings reach the map

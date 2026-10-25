@@ -16,7 +16,7 @@ Eval file: `ai\nlu\eval_set.jsonl` · rows evaluated: 150 of 150
 | keywords accuracy | 100.0% |
 | keywords F1 (micro) | 100.0% |
 | Valid model output (no fallback) | 100.0% |
-| Latency mean / median / p95 (ms) | 8043.0 / 7962.2 / 9416.9 |
+| Latency mean / median / p95 (ms) | 8379.3 / 8549.4 / 10149.7 |
 
 ## By tag
 
