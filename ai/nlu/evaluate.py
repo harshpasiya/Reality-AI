@@ -78,6 +78,7 @@ def _summary(pq: ParsedQuery) -> dict[str, Any]:
 
 
 def run_eval(parser_name: str, eval_file: Path) -> dict[str, Any]:
+    """Run one parser over every eval row; return accuracy, latency and failure details."""
     parse = _load_parser(parser_name)
     rows = [json.loads(line) for line in eval_file.read_text(encoding="utf-8").splitlines()
             if line.strip()]
@@ -160,6 +161,7 @@ def _pct(x: float | None) -> str:
 
 
 def to_markdown(r: dict[str, Any]) -> str:
+    """Render a run_eval() report as the Markdown saved to ai/docs/nlu-eval-<name>.md."""
     lines = [
         f"# NLU evaluation — `{r['name']}` parser",
         "",
@@ -198,6 +200,7 @@ def to_markdown(r: dict[str, Any]) -> str:
 
 
 def print_report(r: dict[str, Any]) -> None:
+    """Print a run_eval() report to the console."""
     print(f"\n=== {r['name']} parser on {r['n_evaluated']} rows ===")
     if r["bad_rows"]:
         print(f"  [WARN] skipped {len(r['bad_rows'])} invalid eval rows: lines {r['bad_rows']}")
@@ -221,6 +224,7 @@ def print_report(r: dict[str, Any]) -> None:
 
 
 def compare_reports(names: list[str]) -> None:
+    """Print a side-by-side Markdown table of saved reports (exits if one is missing)."""
     reports = []
     for name in names:
         path = DOCS_DIR / f"nlu-eval-{name}.json"

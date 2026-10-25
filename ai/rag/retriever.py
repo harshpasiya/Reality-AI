@@ -121,6 +121,7 @@ class _Filters:
     candidate_ids: tuple[int, ...] | None = None
 
     def describe(self) -> str:
+        """Short human-readable summary of the active filters, for logs."""
         parts = []
         if self.price_min is not None:
             parts.append(f"price>={self.price_min:.0f}")
