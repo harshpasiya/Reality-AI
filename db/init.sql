@@ -1,6 +1,6 @@
 -- Reality AI — Local dev database initialisation
 -- Runs automatically on first container start via docker-entrypoint-initdb.d.
--- Installs required extensions and creates a minimal listings table for
+-- Installs required extensions and creates a minimal listing table for
 -- AI-track testing independently of Person 2's real backend.
 
 -- ──────────────────────────────────────────────────────────────────────
@@ -10,34 +10,45 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ──────────────────────────────────────────────────────────────────────
--- listings table
+-- listing table
 --
--- NOTE: This mirrors a SUBSET of Person 2's real schema (backend/app/models/listing.py)
--- for local AI-track testing only. The authoritative schema and all
--- migrations live in the backend repo. Do not treat this as the source
--- of truth — if the real schema changes, update this file to match.
+-- NOTE: This mirrors a SUBSET of Person 2's real schema (app/models/listing.py
+-- in the backend repo) for local AI-track testing only. The authoritative
+-- schema and all migrations live in the backend repo. Do not treat this as
+-- the source of truth — if the real schema changes, update this file to match.
 --
--- Omitted columns (added by Person 2's backend): broker_id, carpet_area,
--- built_up_area, plot_area, floor_number, rooms (JSON), location (PostGIS
--- geometry). We store lat/lng as raw doubles here for simplicity.
+-- Same names, types and constraints as the backend for every column the AI
+-- reads or writes. Omitted: carpet_area, built_up_area, plot_area,
+-- floor_number, images, view_count, updated_at; broker_id has no foreign key
+-- because there is no broker table here.
 -- embedding dimension: 384 (all-MiniLM-L6-v2, see ai/embeddings/embedding_model.py)
 -- ──────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS listings (
-    id           SERIAL PRIMARY KEY,
-    title        TEXT NOT NULL,
-    description  TEXT,
-    price        NUMERIC(12, 2),
-    property_type TEXT CHECK (property_type IN ('flat', 'house_land')),
-    -- Local-test only: bedroom count for the retriever's BHK filter (NULL for
-    -- plots). Person 2's real schema exposes bedrooms through the `rooms` JSON
-    -- field instead; the mapping happens at merge time.
-    bhk          INTEGER,
-    lat          DOUBLE PRECISION NOT NULL,
-    lng          DOUBLE PRECISION NOT NULL,
-    embedding    vector(384),
-    amenities    JSONB,
-    created_at   TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS listing (
+    id            SERIAL PRIMARY KEY,
+    broker_id     INTEGER,
+    title         VARCHAR(200) NOT NULL,
+    description   TEXT,
+    price         NUMERIC(12, 2) NOT NULL,
+    property_type VARCHAR NOT NULL,
+    location      geometry(POINT, 4326) NOT NULL,
+    -- {"bedrooms": int, "bathrooms": int, ...}; NULL for open plots
+    rooms         JSON,
+    embedding     vector(384),
+    amenities     JSON,
+    status        VARCHAR(20) NOT NULL DEFAULT 'available',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_listing_property_type CHECK (property_type IN ('flat', 'house_land')),
+    CONSTRAINT ck_listing_status CHECK (status IN ('available', 'under_offer', 'sold', 'withdrawn')),
+    CONSTRAINT ck_listing_rooms_bedrooms CHECK (
+        rooms IS NULL OR rooms::jsonb->'bedrooms' IS NULL
+        OR (rooms::jsonb->>'bedrooms') ~ '^[0-9]+$'
+    )
 );
+
+CREATE INDEX IF NOT EXISTS ix_listing_status ON listing (status);
+CREATE INDEX IF NOT EXISTS idx_listing_location ON listing USING gist (location);
+CREATE INDEX IF NOT EXISTS idx_listing_location_geog ON listing USING gist ((location::geography));
+CREATE INDEX IF NOT EXISTS ix_listing_bedrooms ON listing (((rooms->>'bedrooms')::int));
 
 -- No vector index on purpose. At a few hundred rows an exact scan takes well
 -- under a millisecond. The IVFFlat index that used to be here was (a) built on

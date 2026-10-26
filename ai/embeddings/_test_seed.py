@@ -6,26 +6,33 @@ Run this after `docker-compose up -d` to populate the DB for local AI testing.
 Usage (from repo root, with .venv active):
     python -m ai.embeddings._test_seed
 
-Re-seeding after the Qwen3 migration (adds the bhk column, drops the old
-IVFFlat index) — works on an existing Docker volume, no `down -v` needed:
+Writes to the `listing` table, shaped like Person 2's backend table
+(PostGIS `location`, bedrooms in `rooms` JSON, `status`). The script applies
+db/init.sql itself, so it works on an existing Docker volume too — no
+`down -v` needed:
     docker-compose up -d
     python -m ai.embeddings._test_seed
     python -m ai.embeddings.embed_listings     # new rows need embeddings again
 
-`bhk` is a local-test column only: Person 2's real schema stores rooms in a
-`rooms` JSON field, so the retriever's BHK filter gets mapped at merge time.
+Every 20th listing is marked `sold` so the search's status filter is exercised.
+The old local `listings` table (lat/lng/bhk columns) is no longer used; it is
+left in place and can be dropped by hand.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import random
 import sys
 from decimal import Decimal
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+INIT_SQL = Path(__file__).resolve().parents[2] / "db" / "init.sql"
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -349,25 +356,34 @@ def main() -> None:
     listings = generate_listings(210)
 
     with engine.begin() as conn:
-        # Bring a database created by the older init.sql up to date (both no-ops
-        # on a fresh volume): the retriever filters on bhk, and the IVFFlat index
-        # built on an empty table returned too few rows once filters were added.
-        conn.execute(text("ALTER TABLE listings ADD COLUMN IF NOT EXISTS bhk INTEGER"))
-        conn.execute(text("DROP INDEX IF EXISTS listings_embedding_idx"))
-        deleted = conn.execute(text("DELETE FROM listings")).rowcount
+        # init.sql only runs on a fresh Docker volume; every statement in it is
+        # IF NOT EXISTS, so re-applying it here creates the listing table on an
+        # older volume and is a no-op otherwise. exec_driver_sql: the file's
+        # "::" casts must not be parsed as bind parameters.
+        conn.exec_driver_sql(INIT_SQL.read_text(encoding="utf-8"))
+        deleted = conn.execute(text("DELETE FROM listing")).rowcount
         if deleted:
-            print(f"  Cleared {deleted} existing row(s) from listings table.")
+            print(f"  Cleared {deleted} existing row(s) from listing table.")
 
-        # _neighbourhood is only for the summary below — strip it before the
-        # INSERT so the params dict matches the table's actual columns exactly.
         insert_rows = [
-            {k: v for k, v in l.items() if k != "_neighbourhood"} for l in listings
+            {
+                "title": l["title"],
+                "description": l["description"],
+                "price": l["price"],
+                "property_type": l["property_type"],
+                "rooms": json.dumps({"bedrooms": l["bhk"]}) if l["bhk"] is not None else None,
+                "lat": l["lat"],
+                "lng": l["lng"],
+                "status": "sold" if i % 20 == 19 else "available",
+            }
+            for i, l in enumerate(listings)
         ]
         conn.execute(
             text(
                 """
-                INSERT INTO listings (title, description, price, property_type, bhk, lat, lng)
-                VALUES (:title, :description, :price, :property_type, :bhk, :lat, :lng)
+                INSERT INTO listing (title, description, price, property_type, rooms, location, status)
+                VALUES (:title, :description, :price, :property_type, CAST(:rooms AS JSON),
+                        ST_SetSRID(ST_MakePoint(:lng, :lat), 4326), :status)
                 """
             ),
             insert_rows,

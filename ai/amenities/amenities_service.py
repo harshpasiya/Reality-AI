@@ -26,6 +26,8 @@ import requests
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from ai.rag.listing_sql import LAT_SQL, LNG_SQL, VISIBLE_STATUS_SQL
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -87,7 +89,7 @@ def _get_listing_location(listing_id: int) -> tuple[float, float]:
     """Fetch a listing's (lat, lng). Raises ListingNotFoundError if missing."""
     with _engine.connect() as conn:
         row = conn.execute(
-            text("SELECT lat, lng FROM listings WHERE id = :id"),
+            text(f"SELECT {LAT_SQL}, {LNG_SQL} FROM listing WHERE id = :id"),
             {"id": listing_id},
         ).fetchone()
     if row is None:
@@ -98,7 +100,7 @@ def _get_listing_location(listing_id: int) -> tuple[float, float]:
 def _get_existing_amenities(listing_id: int) -> dict | None:
     with _engine.connect() as conn:
         row = conn.execute(
-            text("SELECT amenities FROM listings WHERE id = :id"),
+            text("SELECT amenities FROM listing WHERE id = :id"),
             {"id": listing_id},
         ).fetchone()
     if row is None or row[0] is None:
@@ -257,7 +259,7 @@ def fetch_and_cache(listing_id: int, force: bool = False) -> None:
 
         with _engine.begin() as conn:
             conn.execute(
-                text("UPDATE listings SET amenities = :amenities WHERE id = :id"),
+                text("UPDATE listing SET amenities = :amenities WHERE id = :id"),
                 {"amenities": json.dumps(amenities), "id": listing_id},
             )
 
@@ -290,7 +292,10 @@ def fetch_and_cache(listing_id: int, force: bool = False) -> None:
 
 
 def fetch_and_cache_all_missing(delay_seconds: float = 0.2) -> int:
-    """Batch-fill amenities for every listing that doesn't have them yet.
+    """Batch-fill amenities for every visible listing that doesn't have them yet.
+
+    Sold and withdrawn listings are skipped to save Places API quota; the
+    backend calls ``fetch_and_cache`` itself when a listing is created or moved.
 
     Mirrors what would run during demo-data prep after seeding synthetic
     listings. A short delay between calls keeps well under Places API rate
@@ -304,7 +309,7 @@ def fetch_and_cache_all_missing(delay_seconds: float = 0.2) -> int:
     """
     with _engine.connect() as conn:
         rows = conn.execute(
-            text("SELECT id FROM listings WHERE amenities IS NULL")
+            text(f"SELECT id FROM listing WHERE amenities IS NULL AND {VISIBLE_STATUS_SQL}")
         ).fetchall()
 
     ids = [row[0] for row in rows]

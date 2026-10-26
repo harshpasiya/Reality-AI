@@ -60,7 +60,7 @@
 > 4. Embed the query
 > 5. Build SQL: price range, property type, BHK, `ST_DWithin` radius around the locality, `id = ANY(:candidate_ids)`, `embedding IS NOT NULL`, ordered by `embedding <-> :query_vector`
 > 6. If nothing matches, relax step by step: radius ×2 → drop BHK → drop locality (never price or type)
-> 7. Return dicts with id, title, description, price, property_type, bhk, lat, lng, amenities, distance_score, and `match_note` saying which step matched
+> 7. Return dicts with id, title, description, price, property_type, bhk (from `rooms`), lat, lng (from `location`), amenities, distance_score, and `match_note` saying which step matched
 
 **Q: What is `distance_score` in the results?**
 > The pgvector Euclidean distance between the query vector and the listing vector. For unit vectors it runs from 0 (identical) to 2 (opposite); lower = more similar. It is used for ranking, not shown to the customer.
@@ -180,13 +180,14 @@
 
 **Q: How does the PostGIS query work?**
 > ```sql
-> SELECT id FROM listings
+> SELECT id FROM listing
 > WHERE ST_Contains(
->     ST_GeomFromText(:polygon_wkt, 4326),
->     ST_SetSRID(ST_MakePoint(lng, lat), 4326)
+>     ST_MakeValid(ST_GeomFromText(:polygon_wkt, 4326)),
+>     location
 > )
+> AND status IN ('available', 'under_offer')
 > ```
-> The polygon is converted to WKT format. `ST_Contains` checks if each listing's point falls inside the polygon. SRID 4326 = WGS84 (standard GPS coordinates).
+> The polygon is converted to WKT format. `ST_Contains` checks if each listing's `location` point (a PostGIS column in Person 2's `listing` table) falls inside the polygon. `ST_MakeValid` repairs self-crossing hand-drawn shapes. SRID 4326 = WGS84 (standard GPS coordinates). Sold and withdrawn listings are excluded.
 
 **Q: What if the polygon has fewer than 3 points?**
 > Raises `ValueError`. If the ring isn't closed (first ≠ last point), it's auto-closed — a common frontend omission handled gracefully.
@@ -240,24 +241,23 @@
 **Q: What database are you using?**
 > PostgreSQL 16 with two extensions: **PostGIS** (spatial queries for locality radius and boundary search) and **pgvector** (vector similarity search). Docker-compose runs it on port 5433.
 
-**Q: What does the listings table look like?**
-> Locally, the AI track tests against a stand-in table:
+**Q: What does the listing table look like?**
+> The AI reads and writes Person 2's `listing` table. The columns it uses:
 > ```sql
-> CREATE TABLE listings (
+> CREATE TABLE listing (
 >     id            SERIAL PRIMARY KEY,
->     title         TEXT NOT NULL,
+>     title         VARCHAR(200) NOT NULL,
 >     description   TEXT,
->     price         NUMERIC(12, 2),
->     property_type TEXT CHECK (property_type IN ('flat', 'house_land')),
->     bhk           INTEGER,
->     lat           DOUBLE PRECISION NOT NULL,
->     lng           DOUBLE PRECISION NOT NULL,
+>     price         NUMERIC(12, 2) NOT NULL,
+>     property_type VARCHAR NOT NULL,          -- 'flat' or 'house_land'
+>     location      geometry(POINT, 4326) NOT NULL,
+>     rooms         JSON,                      -- {"bedrooms": 2, ...}; NULL for plots
 >     embedding     vector(384),
->     amenities     JSONB,
->     created_at    TIMESTAMPTZ DEFAULT NOW()
+>     amenities     JSON,
+>     status        VARCHAR(20) NOT NULL DEFAULT 'available'
 > );
 > ```
-> The backend's real `listing` table stores a PostGIS `location` point and the bedroom count inside a `rooms` JSON column; at merge the AI SQL is switched to that schema.
+> BHK is read as `(rooms->>'bedrooms')::int`, latitude and longitude as `ST_Y(location)` and `ST_X(location)`. Only `available` and `under_offer` listings appear in search. The local `db/init.sql` creates the same columns for AI-only testing.
 
 **Q: How do you connect to the database?**
 > SQLAlchemy engine with connection pooling (`pool_size=5, max_overflow=10, pool_pre_ping=True`). The `DATABASE_URL` comes from `.env`. Each module creates its own engine at import time — the pool is reused across calls, not a new connection per query.
