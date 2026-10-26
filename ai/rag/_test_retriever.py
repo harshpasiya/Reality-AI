@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import sys
 
+from ai.rag.boundary_filter import get_candidates
 from ai.rag.retriever import search
 
 # ---------------------------------------------------------------------------
@@ -78,5 +79,56 @@ def main() -> None:
     print(f"{'=' * 72}\n")
 
 
+def test_boundary_aware_retrieval() -> None:
+    """Cross-check that boundary + semantic search actually combine.
+
+    Draws a rough rectangle around roughly half of Surat (west side —
+    Adajan/Vesu/Citylight side of the river), gets candidate IDs from
+    boundary_filter, then confirms retriever.search() respects that
+    restriction: every returned result's lat/lng should fall within the
+    polygon's bounding box.
+    """
+    # Adjust these four corners to match coordinates that actually bound
+    # roughly half your seeded Surat listings — check ai/embeddings/
+    # _test_seed.py's NEIGHBOURHOODS list for real reference points.
+    test_polygon = [
+        [21.20, 72.75],
+        [21.20, 72.83],
+        [21.16, 72.83],
+        [21.16, 72.75],
+    ]
+    lat_min, lat_max = 21.16, 21.20
+    lng_min, lng_max = 72.75, 72.83
+
+    print(f"\n{'=' * 72}")
+    print("  BOUNDARY-AWARE RETRIEVAL CHECK")
+    print("=" * 72)
+
+    candidate_ids = get_candidates(test_polygon)
+    print(f"  Boundary matched {len(candidate_ids)} listing(s) total.")
+
+    if not candidate_ids:
+        print("  No candidates in this polygon \u2014 adjust test_polygon's "
+              "coordinates to actually cover some seeded listings.")
+        return
+
+    query = "flat with good amenities"
+    results = search(query, candidate_ids=candidate_ids, top_k=5)
+    print(f"  Query {query!r} with boundary filter -> {len(results)} result(s):\n")
+
+    violations = 0
+    for r in results:
+        lat, lng = r["lat"], r["lng"]
+        in_bounds = (lat_min <= lat <= lat_max) and (lng_min <= lng <= lng_max)
+        flag = "" if in_bounds else "  [OUTSIDE POLYGON BOUNDS \u2014 BUG]"
+        if not in_bounds:
+            violations += 1
+        print(f"    {r['title']}  (lat={lat:.4f}, lng={lng:.4f}){flag}")
+
+    print(f"\n  {'PASS' if violations == 0 else 'FAIL'}: "
+          f"{violations} of {len(results)} result(s) fell outside the drawn polygon.")
+
+
 if __name__ == "__main__":
     main()
+    test_boundary_aware_retrieval()

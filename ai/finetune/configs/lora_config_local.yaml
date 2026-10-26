@@ -1,0 +1,48 @@
+# ==========================================================================
+# LoRA config — local debug run: Qwen/Qwen3-1.7B on an RTX 3050 (4 GB VRAM)
+# ==========================================================================
+# Read by ai/finetune/train_lora_debug.py. Its only job is to prove the
+# pipeline works end to end before spending Kaggle GPU hours; the adapter it
+# produces is never used in production.
+# ==========================================================================
+
+# ── r (rank) ──────────────────────────────────────────────────────────────
+# Rank of the low-rank update matrices. Memory and trainable parameters grow
+# linearly with r. 8 is plenty for a narrow task (sentence -> fixed JSON
+# schema) and keeps the optimizer state small on a 4 GB card.
+r: 8
+
+# ── lora_alpha ────────────────────────────────────────────────────────────
+# The update is scaled by lora_alpha / r. Keeping alpha = 2 x r (16 / 8 = 2.0)
+# is the common convention: the update magnitude stays comparable when r
+# changes, so the same learning rate works for both configs.
+lora_alpha: 16
+
+# ── lora_dropout ──────────────────────────────────────────────────────────
+# Light regularisation. The training data is template-generated, so the main
+# risk is memorising phrasings; 0.05 helps without slowing learning much.
+lora_dropout: 0.05
+
+# ── bias ──────────────────────────────────────────────────────────────────
+# Don't train bias terms: they add little for LoRA and complicate merging.
+bias: none
+
+# ── target_modules ────────────────────────────────────────────────────────
+# Qwen3 uses Llama-style module names: separate q/k/v/o attention projections
+# and a gated MLP (gate/up/down). Targeting all seven adapts both attention
+# and MLP, which matters for learning a strict output format.
+# Confirm once with:  for n, _ in model.named_modules(): print(n)
+# — a wrong name silently gives zero trainable parameters for that layer
+# (the training script asserts the trainable share is > 0 and < 5%).
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+# ── task_type ─────────────────────────────────────────────────────────────
+# Decoder-only, next-token prediction.
+task_type: CAUSAL_LM

@@ -1,7 +1,7 @@
 # ADR-001 — Base Model Selection
 
 **Date:** 2026-08-19
-**Status:** Accepted
+**Status:** Superseded by ADR-002 (2026-10-23)
 **Decided by:** Person 1 (AI/RAG track)
 
 ## Decision

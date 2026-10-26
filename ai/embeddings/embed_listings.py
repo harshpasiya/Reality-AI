@@ -273,7 +273,8 @@ def run(batch_size: int = 50) -> int:
 
     Processes rows in batches of *batch_size*, calling ``embed_single()`` for
     each.  Failures on individual rows are logged and skipped — the batch
-    continues rather than aborting.
+    continues rather than aborting, and each listing is attempted at most
+    once per call.
 
     This is for the initial pass over freshly-seeded data.  Day-to-day,
     individual listings are embedded via ``embed_single()`` directly.
@@ -286,6 +287,10 @@ def run(batch_size: int = 50) -> int:
     """
     total_updated = 0
     batch_num = 0
+    # Keyset pagination: always move past the last ID seen. Re-selecting
+    # "embedding IS NULL" from the start would pick up a listing that keeps
+    # failing (e.g. empty text) on every pass and never terminate.
+    last_id = 0
 
     while True:
         # Fetch next batch of un-embedded listing IDs
@@ -293,11 +298,11 @@ def run(batch_size: int = 50) -> int:
             rows = conn.execute(
                 text(
                     "SELECT id FROM listings "
-                    "WHERE embedding IS NULL "
+                    "WHERE embedding IS NULL AND id > :last_id "
                     "ORDER BY id "
                     "LIMIT :batch_size"
                 ),
-                {"batch_size": batch_size},
+                {"batch_size": batch_size, "last_id": last_id},
             ).fetchall()
 
         if not rows:
@@ -305,6 +310,7 @@ def run(batch_size: int = 50) -> int:
 
         batch_num += 1
         ids = [row.id for row in rows]
+        last_id = ids[-1]
         logger.info(
             "Batch %d: embedding %d listings (ids %d..%d)...",
             batch_num, len(ids), ids[0], ids[-1],

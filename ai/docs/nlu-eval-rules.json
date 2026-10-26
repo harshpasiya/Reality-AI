@@ -1,0 +1,555 @@
+{
+  "name": "rules",
+  "eval_file": "ai\\nlu\\eval_set.jsonl",
+  "n_rows": 150,
+  "n_evaluated": 150,
+  "bad_rows": [],
+  "field_accuracy": {
+    "is_property_query": 0.9666666666666667,
+    "bhk": 1.0,
+    "locality": 0.98,
+    "property_type": 0.9866666666666667,
+    "price_min": 1.0,
+    "price_max": 0.9866666666666667,
+    "keywords": 0.9733333333333334
+  },
+  "keywords_f1": 0.9574468085106383,
+  "exact_match": 0.9133333333333333,
+  "model_output_valid_rate": null,
+  "latency_ms": {
+    "mean": 0.40772732890521485,
+    "median": 0.20365003729239106,
+    "p95": 1.9185999408364296
+  },
+  "by_tag": {
+    "approx": {
+      "n": 6,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "edge-case": {
+      "n": 5,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "gujarati": {
+      "n": 14,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "hinglish": {
+      "n": 18,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "keywords": {
+      "n": 14,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "landmark": {
+      "n": 10,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "no-filters": {
+      "n": 6,
+      "exact_match": 0.8333333333333334,
+      "is_property_query": 0.8333333333333334,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "normal": {
+      "n": 18,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "offtopic": {
+      "n": 12,
+      "exact_match": 0.6666666666666666,
+      "is_property_query": 0.6666666666666666,
+      "bhk": 1.0,
+      "locality": 0.8333333333333334,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "price-max": {
+      "n": 6,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "price-min": {
+      "n": 6,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "price-only": {
+      "n": 5,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "price-range": {
+      "n": 6,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "property-type": {
+      "n": 10,
+      "exact_match": 1.0,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 1.0,
+      "property_type": 1.0,
+      "price_min": 1.0,
+      "price_max": 1.0,
+      "keywords": 1.0
+    },
+    "typo": {
+      "n": 14,
+      "exact_match": 0.42857142857142855,
+      "is_property_query": 1.0,
+      "bhk": 1.0,
+      "locality": 0.9285714285714286,
+      "property_type": 0.8571428571428571,
+      "price_min": 1.0,
+      "price_max": 0.8571428571428571,
+      "keywords": 0.7142857142857143
+    }
+  },
+  "worst_failures": [
+    {
+      "line": 84,
+      "query": "appartment in pipload under 70 laks",
+      "tag": "typo",
+      "wrong": [
+        "property_type",
+        "price_max"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Piplod",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": 7000000.0,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Piplod",
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 135,
+      "query": "what are the best vegetarian restaurants in vesu surat?",
+      "tag": "offtopic",
+      "wrong": [
+        "is_property_query",
+        "locality"
+      ],
+      "expected": {
+        "is_property_query": false,
+        "bhk": null,
+        "locality": null,
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Vesu",
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 136,
+      "query": "how far is surat airport from railway station?",
+      "tag": "offtopic",
+      "wrong": [
+        "is_property_query",
+        "locality"
+      ],
+      "expected": {
+        "is_property_query": false,
+        "bhk": null,
+        "locality": null,
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Surat Airport",
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 82,
+      "query": "bunglow in athwalines above 2 cr",
+      "tag": "typo",
+      "wrong": [
+        "property_type"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Athwa",
+        "property_type": "house_land",
+        "price_min": 20000000.0,
+        "price_max": null,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Athwa",
+        "property_type": null,
+        "price_min": 20000000.0,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 85,
+      "query": "plot in katargaam with cornor plot",
+      "tag": "typo",
+      "wrong": [
+        "keywords"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Katargam",
+        "property_type": "house_land",
+        "price_min": null,
+        "price_max": null,
+        "keywords": [
+          "corner plot"
+        ]
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Katargam",
+        "property_type": "house_land",
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 87,
+      "query": "penthouse in ghoddod rd with gymancium",
+      "tag": "typo",
+      "wrong": [
+        "keywords"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Ghod Dod Road",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": null,
+        "keywords": [
+          "gym"
+        ]
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Ghod Dod Road",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 88,
+      "query": "3bhk flat in palanpor near skool",
+      "tag": "typo",
+      "wrong": [
+        "keywords"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": 3,
+        "locality": "Palanpur",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": null,
+        "keywords": [
+          "near school"
+        ]
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": 3,
+        "locality": "Palanpur",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 91,
+      "query": "flat near dumas bech 1 cr",
+      "tag": "typo",
+      "wrong": [
+        "locality"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Dumas Beach",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": 10000000.0,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Dumas",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": 10000000.0,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 92,
+      "query": "plot in sachin area 40 laks",
+      "tag": "typo",
+      "wrong": [
+        "price_max"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Sachin",
+        "property_type": "house_land",
+        "price_min": null,
+        "price_max": 4000000.0,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": "Sachin",
+        "property_type": "house_land",
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 93,
+      "query": "2bhk flat in udhana with balcany",
+      "tag": "typo",
+      "wrong": [
+        "keywords"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": 2,
+        "locality": "Udhna",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": null,
+        "keywords": [
+          "balcony"
+        ]
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": 2,
+        "locality": "Udhna",
+        "property_type": "flat",
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 133,
+      "query": "tell me a funny joke about real estate agents",
+      "tag": "offtopic",
+      "wrong": [
+        "is_property_query"
+      ],
+      "expected": {
+        "is_property_query": false,
+        "bhk": null,
+        "locality": null,
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": null,
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 138,
+      "query": "how do i make surati locho at home?",
+      "tag": "offtopic",
+      "wrong": [
+        "is_property_query"
+      ],
+      "expected": {
+        "is_property_query": false,
+        "bhk": null,
+        "locality": null,
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": null,
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    },
+    {
+      "line": 140,
+      "query": "show me what you've got",
+      "tag": "no-filters",
+      "wrong": [
+        "is_property_query"
+      ],
+      "expected": {
+        "is_property_query": true,
+        "bhk": null,
+        "locality": null,
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "predicted": {
+        "is_property_query": false,
+        "bhk": null,
+        "locality": null,
+        "property_type": null,
+        "price_min": null,
+        "price_max": null,
+        "keywords": []
+      },
+      "source": "rules"
+    }
+  ]
+}

@@ -5,6 +5,15 @@ Run this after `docker-compose up -d` to populate the DB for local AI testing.
 
 Usage (from repo root, with .venv active):
     python -m ai.embeddings._test_seed
+
+Re-seeding after the Qwen3 migration (adds the bhk column, drops the old
+IVFFlat index) — works on an existing Docker volume, no `down -v` needed:
+    docker-compose up -d
+    python -m ai.embeddings._test_seed
+    python -m ai.embeddings.embed_listings     # new rows need embeddings again
+
+`bhk` is a local-test column only: Person 2's real schema stores rooms in a
+`rooms` JSON field, so the retriever's BHK filter gets mapped at merge time.
 """
 
 from __future__ import annotations
@@ -51,19 +60,19 @@ NEIGHBOURHOODS = [
     {"name": "Citylight",      "lat": 21.1724, "lng": 72.8101, "tier": "premium"},
     {"name": "Pal",            "lat": 21.1977, "lng": 72.7742, "tier": "mid"},
     {"name": "Althan",         "lat": 21.1674, "lng": 72.8180, "tier": "mid"},
-    {"name": "Bhatar",         "lat": 21.1882, "lng": 72.8500, "tier": "mid"},
+    {"name": "Bhatar",         "lat": 21.1670, "lng": 72.8138, "tier": "mid"},
     {"name": "Ghod Dod Road",  "lat": 21.1790, "lng": 72.8198, "tier": "premium"},
     {"name": "Palanpur",       "lat": 21.2088, "lng": 72.8056, "tier": "mid"},
     {"name": "Jahangirpura",   "lat": 21.2218, "lng": 72.8289, "tier": "mid"},
     {"name": "Varachha",       "lat": 21.2197, "lng": 72.8684, "tier": "budget"},
     {"name": "Katargam",       "lat": 21.2377, "lng": 72.8428, "tier": "budget"},
-    {"name": "Udhna",          "lat": 21.2120, "lng": 72.8400, "tier": "budget"},
+    {"name": "Udhna",          "lat": 21.1688, "lng": 72.8447, "tier": "budget"},
     {"name": "Dumas",          "lat": 21.0977, "lng": 72.7166, "tier": "premium"},
     {"name": "Sarthana",       "lat": 21.2356, "lng": 72.8741, "tier": "budget"},
     {"name": "Rander",         "lat": 21.2360, "lng": 72.7669, "tier": "mid"},
     {"name": "Sachin",         "lat": 21.0862, "lng": 72.8641, "tier": "budget"},
-    {"name": "Puna Kumbharia", "lat": 21.2551, "lng": 72.8211, "tier": "budget"},
-    {"name": "Kapodra",        "lat": 21.2282, "lng": 72.8059, "tier": "budget"},
+    {"name": "Puna Kumbharia", "lat": 21.1995, "lng": 72.8642, "tier": "budget"},
+    {"name": "Kapodra",        "lat": 21.2212, "lng": 72.8746, "tier": "budget"},
 ]
 
 # ---------------------------------------------------------------------------
@@ -268,6 +277,7 @@ def _make_flat(neighbourhood: dict) -> dict:
         "description": desc,
         "price": Decimal(str(price)),
         "property_type": "flat",
+        "bhk": bhk,
         "lat": _jitter(neighbourhood["lat"]),
         "lng": _jitter(neighbourhood["lng"]),
     }
@@ -298,6 +308,7 @@ def _make_land(neighbourhood: dict) -> dict:
         "description": desc,
         "price": Decimal(str(price)),
         "property_type": "house_land",
+        "bhk": None,  # plots have no bedroom count
         "lat": _jitter(neighbourhood["lat"]),
         "lng": _jitter(neighbourhood["lng"]),
     }
@@ -310,9 +321,11 @@ def generate_listings(n: int = 210) -> list[dict]:
     for i in range(n):
         neighbourhood = NEIGHBOURHOODS[i % len(NEIGHBOURHOODS)]
         if random.random() < 0.75:
-            listings.append(_make_flat(neighbourhood))
+            listing = _make_flat(neighbourhood)
         else:
-            listings.append(_make_land(neighbourhood))
+            listing = _make_land(neighbourhood)
+        listing["_neighbourhood"] = neighbourhood["name"]  # for the seed summary only, not a DB column
+        listings.append(listing)
     random.shuffle(listings)
     return listings
 
@@ -336,18 +349,28 @@ def main() -> None:
     listings = generate_listings(210)
 
     with engine.begin() as conn:
+        # Bring a database created by the older init.sql up to date (both no-ops
+        # on a fresh volume): the retriever filters on bhk, and the IVFFlat index
+        # built on an empty table returned too few rows once filters were added.
+        conn.execute(text("ALTER TABLE listings ADD COLUMN IF NOT EXISTS bhk INTEGER"))
+        conn.execute(text("DROP INDEX IF EXISTS listings_embedding_idx"))
         deleted = conn.execute(text("DELETE FROM listings")).rowcount
         if deleted:
             print(f"  Cleared {deleted} existing row(s) from listings table.")
 
+        # _neighbourhood is only for the summary below — strip it before the
+        # INSERT so the params dict matches the table's actual columns exactly.
+        insert_rows = [
+            {k: v for k, v in l.items() if k != "_neighbourhood"} for l in listings
+        ]
         conn.execute(
             text(
                 """
-                INSERT INTO listings (title, description, price, property_type, lat, lng)
-                VALUES (:title, :description, :price, :property_type, :lat, :lng)
+                INSERT INTO listings (title, description, price, property_type, bhk, lat, lng)
+                VALUES (:title, :description, :price, :property_type, :bhk, :lat, :lng)
                 """
             ),
-            listings,
+            insert_rows,
         )
 
     # ── Summary ────────────────────────────────────────────────────────────
@@ -357,18 +380,17 @@ def main() -> None:
 
     by_area: dict[str, int] = {}
     for l in listings:
-        # Find which neighbourhood this listing belongs to (by nearest anchor)
-        pass
+        area_name = l["_neighbourhood"]
+        by_area[area_name] = by_area.get(area_name, 0) + 1
 
     print(f"\n[OK] Seeded {len(listings)} Surat listings into '{DATABASE_URL.split('/')[-1]}':")
     print(f"   Property types : {flat_count} flat | {land_count} house_land")
     print(f"   Price range    : Rs.{min(prices):,.0f}  --  Rs.{max(prices):,.0f}")
     print(f"   Avg price      : Rs.{sum(prices)/len(prices):,.0f}")
     print(f"   Neighbourhoods : {len(NEIGHBOURHOODS)} areas across Surat city")
-    print(f"   Coverage       : Adajan, Vesu, Athwa, Piplod, Citylight, Pal, Althan,")
-    print(f"                    Bhatar, Ghod Dod Rd, Palanpur, Jahangirpura, Varachha,")
-    print(f"                    Katargam, Udhna, Dumas, Sarthana, Rander, Sachin,")
-    print(f"                    Puna Kumbharia, Kapodra")
+    print(f"   Listings per area:")
+    for area_name, count in sorted(by_area.items(), key=lambda x: -x[1]):
+        print(f"     {area_name:<18} {count:>3}")
     print(f"\n   Sample listings:")
     for l in random.sample(listings, 5):
         print(f"     [{l['property_type'][:4]}] {l['title']}  (Rs.{float(l['price']):,.0f})")

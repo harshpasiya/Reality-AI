@@ -53,7 +53,7 @@ flowchart TD
 
     subgraph AI["AI / RAG Layer — Person 1"]
         RAG[RAG retrieval - pgvector]
-        LLM[LoRA fine-tuned LLM]
+        LLM[Qwen3 LoRA query parser + templated replies]
         AMN[Amenities service]
     end
 
@@ -83,7 +83,7 @@ A broker's published listing is written to the database, then both **embedded** 
 | Backend | FastAPI, SQLAlchemy + GeoAlchemy2, Alembic, python-jose + passlib |
 | Database | PostgreSQL + PostGIS (geospatial) + pgvector (embeddings) |
 | AI / RAG | sentence-transformers (embeddings), custom retrieval over pgvector |
-| Fine-tuning | LoRA / QLoRA via PEFT + bitsandbytes + trl, base model Llama 3 8B or Mistral 7B, debugged on Phi-3-mini |
+| Fine-tuning | QLoRA via PEFT + bitsandbytes + trl on Qwen/Qwen3-4B-Instruct-2507 for query understanding (sentence -> JSON filters), debugged on Qwen/Qwen3-1.7B; replies are templated, not generated (see `ai/docs/ADR-002-qwen3-nlu-model.md`) |
 | Compute | Local GPU (RTX 3050, Person 1) for debugging; Kaggle Notebooks (free tier) for full fine-tuning runs |
 | External APIs | Google Maps JavaScript API, Google Places API (Nearby Search) |
 | Data | Faker-generated synthetic listings, brokers, and customers using real-world coordinates |
