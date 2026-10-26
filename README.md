@@ -224,6 +224,11 @@ Full per-person, per-phase detail (objectives, tasks, gate criteria) is in each 
 | ET23BTAI054 | Team Member |
 | ET23BTAI026 | Team Member |
 
+## License
+
+Proprietary. © 2026 harshpasiya. All rights reserved. No copying, sharing, modification or sale
+without the author's prior written agreement. See [LICENSE](LICENSE).
+
 ## Contributing
 
 This repo uses a **fork-and-pull-request** workflow, not direct pushes:
