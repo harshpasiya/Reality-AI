@@ -227,7 +227,7 @@ Full per-person, per-phase detail (objectives, tasks, gate criteria) is in each 
 ## License
 
 Proprietary. © 2026 harshpasiya. All rights reserved. No copying, sharing, modification or sale
-without the author's prior written agreement. See [LICENSE](LICENSE).
+without the author's prior written agreement. See [LICENSE](LICENSE). 
 
 ## Contributing
 
