@@ -2,10 +2,10 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import cast, func
-from geoalchemy2 import Geometry, Geography
+from geoalchemy2 import Geography
 from geoalchemy2.elements import WKTElement
 
-from app.models.listing import Listing
+from app.models.listing import Listing, VISIBLE_STATUSES
 
 
 def search_by_radius(
@@ -16,7 +16,7 @@ def search_by_radius(
     limit: int = 20,
     filters: dict | None = None,
 ) -> list[Listing]:
-    """Return listings within *radius_km* of the given point.
+    """Return customer-visible listings within *radius_km* of the given point.
 
     Parameters
     ----------
@@ -39,8 +39,8 @@ def search_by_radius(
     equator but much less at higher latitudes.  Do not "simplify" this
     by removing the cast.
 
-    A spatial GiST index on ``listing.location`` (added in Phase 5)
-    will make this query fast on large datasets.
+    Sold and withdrawn listings are excluded (``VISIBLE_STATUSES``).
+    The geography GiST index ``idx_listing_location_geog`` serves this query.
     """
     if not (-90 <= lat <= 90):
         raise ValueError(f"lat must be in [-90, 90], got {lat}")
@@ -55,11 +55,12 @@ def search_by_radius(
     radius_m = radius_km * 1000
 
     query = db.query(Listing).filter(
+        Listing.status.in_(VISIBLE_STATUSES),
         func.ST_DWithin(
             cast(Listing.location, Geography),
             cast(point, Geography),
             radius_m,
-        )
+        ),
     )
 
     if filters:
@@ -82,60 +83,46 @@ def search_by_radius(
     )
 
 
-def search_by_boundary(
-    db: Session,
-    polygon: list[list[float]],
-    limit: int = 50,
-) -> list[Listing]:
-    """Return listings situated inside a drawn polygon boundary.
+def _polygon_geom(polygon: list[list[float]]):
+    """Build a repaired PostGIS polygon from validated ``[lat, lng]`` points.
 
-    Parameters
-    ----------
-    db : Session
-        Active database session.
-    polygon : list[list[float]]
-        List of ``[lat, lng]`` vertices forming a closed ring.
-    limit : int
-        Max results to return.
-
-    Raises
-    ------
-    ValueError
-        If the shape is self-intersecting or invalid per Shapely.
-
-    Notes
-    -----
-    WKT standard uses ``(longitude, latitude)`` coordinate ordering!
-    We convert the input ``[lat, lng]`` points to ``(lng, lat)`` pairs
-    when rendering the WKT string for PostGIS ``ST_GeomFromText``.
+    WKT standard uses ``(longitude, latitude)`` coordinate ordering, so the
+    input pairs are swapped.  ``ST_MakeValid`` repairs self-crossing shapes
+    (a figure-8 becomes two lobes) instead of rejecting them — the same rule
+    as ``ai.rag.boundary_filter.get_candidates()``.
     """
-    from shapely.geometry import Polygon as ShapelyPolygon
+    wkt_pts = ", ".join(f"{lng} {lat}" for lat, lng in polygon)
+    return func.ST_MakeValid(WKTElement(f"POLYGON(({wkt_pts}))", srid=4326))
 
-    # Convert [lat, lng] to (lng, lat) for Shapely and WKT
-    coords = [(pt[1], pt[0]) for pt in polygon]
 
-    # Validate shape geometry using Shapely
-    shape = ShapelyPolygon(coords)
-    if not shape.is_valid:
-        raise ValueError(
-            "Invalid or self-intersecting polygon shape provided"
-        )
+def boundary_candidate_ids(db: Session, polygon: list[list[float]]) -> list[int]:
+    """IDs of customer-visible listings inside the polygon.
 
-    # Build WKT POLYGON string: POLYGON((lng lat, lng lat, ...))
-    wkt_pts = ", ".join(f"{lng} {lat}" for lng, lat in coords)
-    wkt_poly = f"POLYGON(({wkt_pts}))"
-
-    poly_geom = WKTElement(wkt_poly, srid=4326)
-
-    return (
-        db.query(Listing)
+    Backend-side equivalent of ``get_candidates()``, used when the ``ai/``
+    package is not installed (isolated backend development).
+    """
+    rows = (
+        db.query(Listing.id)
         .filter(
-            func.ST_Contains(
-                poly_geom,
-                Listing.location,
-            )
+            Listing.status.in_(VISIBLE_STATUSES),
+            func.ST_Contains(_polygon_geom(polygon), Listing.location),
         )
-        .limit(limit)
         .all()
     )
+    return [r.id for r in rows]
 
+
+def visible_listings_by_ids(
+    db: Session, ids: list[int], limit: int | None = None
+) -> list[Listing]:
+    """Load customer-visible listings for *ids*, preserving the order of *ids*."""
+    if not ids:
+        return []
+    rows = (
+        db.query(Listing)
+        .filter(Listing.id.in_(ids), Listing.status.in_(VISIBLE_STATUSES))
+        .all()
+    )
+    by_id = {row.id: row for row in rows}
+    ordered = [by_id[i] for i in ids if i in by_id]
+    return ordered[:limit] if limit is not None else ordered

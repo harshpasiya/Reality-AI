@@ -12,7 +12,7 @@ root_dir = Path(__file__).resolve().parents[3]
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
-from app.core.config import settings
+from app.core.config import settings, sqlalchemy_url
 from app.core.database import Base
 import app.models  # noqa: F401 load models for metadata auto-detection
 
@@ -22,7 +22,11 @@ if config.config_file_name:
     fileConfig(config.config_file_name)
 
 # Set database URL dynamically from app settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# (same driver selection as app.core.database, so Alembic never needs a
+# driver the app doesn't).  '%' is doubled because ConfigParser interpolates.
+config.set_main_option(
+    "sqlalchemy.url", sqlalchemy_url(settings.DATABASE_URL).replace("%", "%%")
+)
 
 target_metadata = Base.metadata
 

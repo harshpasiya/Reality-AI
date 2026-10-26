@@ -3,18 +3,10 @@
 from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
-from app.core.config import settings
-
-url = settings.DATABASE_URL
-if url.startswith("postgresql://"):
-    try:
-        import psycopg
-        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
-    except ImportError:
-        pass
+from app.core.config import settings, sqlalchemy_url
 
 engine = create_engine(
-    url,
+    sqlalchemy_url(settings.DATABASE_URL),
     pool_pre_ping=True,
 )
 

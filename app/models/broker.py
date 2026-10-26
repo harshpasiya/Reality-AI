@@ -9,8 +9,11 @@ from app.core.database import Base
 class Broker(Base):
     """A real-estate broker who publishes and manages property listings.
 
-    ``phone_hash`` stores the hashed phone number — raw phone numbers are
-    never persisted.  ``password_hash`` is bcrypt-hashed via passlib.
+    ``phone`` is the broker's business number in E.164 form.  It is never
+    included in public listing responses — only the broker themselves and a
+    customer who has created a lead on one of the broker's listings see it.
+    ``phone_hash`` (frozen contract field) is kept alongside it.
+    ``password_hash`` is bcrypt-hashed via passlib.
     """
 
     __tablename__ = "broker"
@@ -19,6 +22,7 @@ class Broker(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     phone_hash = Column(String, nullable=True)
+    phone = Column(String(20), nullable=True)
     password_hash = Column(String, nullable=False)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -60,6 +60,7 @@ def register(
             password=body.password,
             name=body.name,
             role=body.role,
+            phone=body.phone,
         )
     except DuplicateEmailError:
         raise HTTPException(
@@ -122,4 +123,5 @@ def me(
         email=current_user.email,
         role=_get_role(current_user),  # type: ignore[arg-type]
         created_at=current_user.created_at,
+        phone=getattr(current_user, "phone", None),
     )

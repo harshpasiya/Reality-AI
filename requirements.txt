@@ -11,7 +11,7 @@ pgvector>=0.2.5,<1.0.0
 # Database migration tool for SQLAlchemy
 alembic>=1.13.0,<2.0.0
 # JOSE implementation in Python for JWT encoding and decoding
-python-jose[cryptography]>=3.3.0,<4.0.0
+python-jose[cryptography]>=3.4.0,<4.0.0  # 3.4 fixes CVE-2024-33663 / CVE-2024-33664
 # Password hashing library supporting bcrypt algorithm
 passlib[bcrypt]>=1.7.4,<2.0.0
 # IMPORTANT: passlib 1.7.4 is incompatible with bcrypt>=4.1.0 (API change causes ValueError).
@@ -33,4 +33,7 @@ shapely>=2.0.0,<3.0.0
 email-validator>=2.1.0,<3.0.0
 # Form data parser for FastAPI OAuth2PasswordRequestForm login
 python-multipart>=0.0.9,<1.0.0
+# PostgreSQL driver used by the backend engine (postgresql+psycopg://)
 psycopg[binary]>=3.1.0,<4.0.0
+# PostgreSQL driver used by the AI modules' engines (plain postgresql:// URLs) after the merge
+psycopg2-binary>=2.9.0,<3.0.0

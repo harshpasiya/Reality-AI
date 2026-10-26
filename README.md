@@ -17,10 +17,10 @@
 - ⚡ **Dual GiST Spatial Indexes**: Optimized PostGIS performance with `idx_listing_location` (Geometry GiST) and `idx_listing_location_geog` (Geography GiST) for instant spatial queries.
 - 🔍 **Vector Similarity Search**: `pgvector` vector indexes supporting 384-dimensional embeddings for semantic search over listing descriptions and amenities.
 - 🔐 **Authentication & Security**: Role-based access control (`broker` vs `customer`), unique email enforcement across roles, OAuth2 + JWT authentication, password hashing (`passlib`/`bcrypt`), and token validation (`python-jose`).
-- 💬 **Conversational Chat & Lead Tracking**: Customer-only AI chat (`POST /chat`) with automatic `Lead` creation when listings are recommended, and complete history recall (`GET /chat/{conversation_id}`) returning top-level and per-message listings.
+- 💬 **Conversational Chat & Lead Tracking**: Customer-only AI chat (`POST /chat`) returning AI-ranked listings (shown listings count as views), complete history recall (`GET /chat/{conversation_id}`), and explicit "Contact broker" leads (`POST /listings/{id}/leads`) returning top-level and per-message listings.
 - 🤖 **AI RAG Orchestration**: Direct Python interface integration for Person 1's AI package (`ai.rag`, `ai.embeddings`, `ai.amenities`, `ai.inference`) with seamless fallback to `PLACEHOLDER_MODE`.
 - 🏬 **Amenities Caching Pipeline**: Automatic background caching of Google Places amenities (schools, hospitals, restaurants, transit, parks) and automatic listing re-embedding.
-- 📊 **Broker Analytics**: Analytics service reporting property metrics, total leads, and individual listing view counts.
+- 📊 **Broker Analytics**: Per-listing view counts, lead counts and status; broker dashboard listings and a leads inbox with follow-up status.
 - 🐳 **Containerized & Automated Workflows**: Multi-stage Docker setup with healthcheck dependency waiting, automatic Alembic migrations, and synthetic data seeding script generating 500+ Surat listings, leads, and sample chat sessions.
 
 ---
@@ -106,7 +106,7 @@ cp .env.example .env
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DATABASE_URL` | Yes | `postgresql://postgres:postgres@localhost:5432/reality_ai` | PostgreSQL connection URI |
-| `SECRET_KEY` | Yes | `dev-secret-key-reality-ai-surat-2026` | Secret key for JWT signing (change in production) |
+| `SECRET_KEY` | Yes | *(none — startup fails without it)* | Secret key for JWT signing, at least 32 characters |
 | `POSTGRES_USER` | No | `postgres` | PostgreSQL container username |
 | `POSTGRES_PASSWORD` | No | `postgres` | PostgreSQL container password |
 | `POSTGRES_DB` | No | `reality_ai` | PostgreSQL container database name |
@@ -137,7 +137,7 @@ The simplest way to run the entire backend stack (API server + PostGIS/pgvector 
 3. **Access the services**:
    - **FastAPI API Server**: `http://localhost:8000`
    - **Interactive API Docs (Swagger)**: `http://localhost:8000/docs`
-   - **pgAdmin 4 Web Interface**: `http://localhost:5050` (`admin@reality.ai` / `admin`)
+   - **pgAdmin 4 Web Interface**: `http://localhost:5050` (credentials from `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` in `.env`; bound to localhost)
 
 ---
 
@@ -198,7 +198,7 @@ If you prefer to run the FastAPI app directly on your local system using Python 
 | `customer` | Platform customers | `id`, `name`, `email`, `password_hash`, `created_at` |
 | `listing` | Property listings | `id`, `broker_id`, `title`, `description`, `price`, `property_type`, `location` (PostGIS `POINT`), `carpet_area`, `built_up_area`, `plot_area`, `floor_number`, `rooms`, `embedding` (vector), `amenities`, `created_at` |
 | `conversation` | Customer chat sessions | `id`, `customer_id`, `messages` (JSONB ISO history with listing IDs) |
-| `lead` | Property inquiry leads | `id`, `listing_id`, `customer_id`, `created_at` |
+| `lead` | Explicit "Contact broker" enquiries | `id`, `listing_id`, `customer_id`, `message`, `status`, `conversation_id`, `created_at`, `updated_at` (one per customer and listing) |
 
 ### Spatial Indexing
 
@@ -233,10 +233,10 @@ Per the cross-team contract (`Reality-AI-AGENTS.md`), all endpoints adhere stric
 | `POST` | `/listings` | Broker Only | Publish a new listing & queue background AI tasks |
 | `GET` | `/listings/{id}` | Public | Get single listing details with cached amenities |
 | `GET` | `/listings/search` | Public | Radius search (`lat`, `lng`, `radius_km`) with optional `price_min`, `price_max`, `property_type` |
-| `POST` | `/listings/search-boundary` | Public | Polygon boundary search (`[[lat, lng], ...]`, max 100 vertices) |
-| `POST` | `/chat` | Customer Auth | Process customer chat message via RAG & LLM (creates `Lead` records) |
+| `POST` | `/listings/search-boundary` | Public | Polygon boundary search (`[[lat, lng], ...]`, 3-1000 vertices; self-crossing shapes repaired) |
+| `POST` | `/chat` | Customer Auth | Process customer chat message via RAG & LLM (422 on bad input, 503 if AI search is down) |
 | `GET` | `/chat/{conversation_id}` | Customer Auth | Fetch complete chat history (returns top-level & per-message `listings`) |
-| `GET` | `/brokers/{id}/analytics` | Broker Auth | Fetch total listings, total leads, and property metrics |
+| `GET` | `/brokers/{id}/analytics` | Broker Auth | Total listings, views and leads, with a per-listing breakdown |
 
 ### Interactive OpenAPI Documentation
 

@@ -75,7 +75,7 @@ JWT-based auth is implemented with **python-jose** (HS256) and **passlib/bcrypt*
 **Validation pipeline (three layers):**
 
 1. **Pydantic** (`BoundarySearchRequest`): validates ≥3 points, each point a `[lat, lng]` pair within bounds, and auto-closes the ring if the first and last points differ — accommodating a common frontend omission without erroring.
-2. **Shapely** (`geo_service.search_by_boundary`): constructs a `Polygon` and checks `.is_valid`.  Self-intersecting shapes raise `ValueError` before the DB is touched.
+2. **`ST_MakeValid`** (`geo_service.boundary_candidate_ids`, or the AI's `get_candidates()` when installed): self-crossing shapes are repaired rather than rejected, so the map's boundary search and `/chat` with a polygon follow the same rule.
 3. **PostGIS** (`ST_Contains`): the validated WKT string is passed as a parameterized query — never string-interpolated — preventing SQL injection.
 
 **Coordinate ordering:** WKT standard uses `(longitude, latitude)` while the API accepts `[lat, lng]`.  The service layer swaps coordinates when rendering the WKT string; this is documented with a comment to prevent regression.
@@ -121,7 +121,7 @@ The backend calls Person 1's AI layer via **direct Python imports** (`from ai.ra
 | p95 | 2056.4 ms | 36.8 ms |
 | max | 2061.4 ms | 40.4 ms |
 
-Run `python -m app.db._explain_check` to verify spatial query execution plans. Boundary polygon search uses `Index Scan using ix_listing_location` (GiST spatial index execution time ~0.92 ms).
+Run `python -m app.db._explain_check` to verify spatial query execution plans. Boundary polygon search uses `Index Scan using idx_listing_location` (GiST spatial index execution time ~0.92 ms).
 
 ---
 

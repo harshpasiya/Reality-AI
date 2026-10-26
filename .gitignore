@@ -22,3 +22,5 @@ htmlcov/
 # OS generated files
 .DS_Store
 Thumbs.db
+# Uploaded listing photos
+uploads/

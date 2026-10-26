@@ -1,8 +1,8 @@
 """EXPLAIN ANALYZE helper for spatial queries.
 
 Run this script against the seeded database to verify that the GiST index
-(migration 001_gist_index) is actually being used.  You should see
-``Index Scan using ix_listing_location`` in the output — if you see
+(created in the initial migration) is actually being used.  You should see
+``Index Scan using idx_listing_location`` in the output — if you see
 ``Seq Scan`` instead, the index is missing or the planner has stats that
 make it prefer the scan (usually because the table is nearly empty).
 
@@ -103,7 +103,7 @@ def main() -> None:
         )
 
         # ------------------------------------------------------------------ #
-        # Query 2 — boundary search (mirrors geo_service.search_by_boundary)  #
+        # Query 2 — boundary search (mirrors geo_service.boundary_candidate_ids) #
         # ------------------------------------------------------------------ #
         _explain(
             session,

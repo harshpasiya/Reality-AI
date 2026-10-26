@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.conftest import register_broker, auth_header
+from tests.conftest import register_broker, auth_header, listing_payload
 
 
 class TestAnalytics:
@@ -16,13 +16,7 @@ class TestAnalytics:
         # First decode user_id or create a listing to get broker id
         listing_resp = client.post(
             "/listings",
-            json={
-                "title": "Broker Listing for Analytics",
-                "price": 3500000,
-                "property_type": "flat",
-                "lat": 21.1702,
-                "lng": 72.8311,
-            },
+            json=listing_payload(title="Broker Listing for Analytics", price=3500000),
             headers=auth_header(token),
         )
         broker_id = listing_resp.json()["broker_id"]
@@ -35,6 +29,7 @@ class TestAnalytics:
         data = resp.json()
         assert data["total_listings"] >= 1
         assert "total_leads" in data
+        assert "total_views" in data
         assert "listings_breakdown" in data
 
     def test_get_analytics_other_broker_forbidden_403(self, client: TestClient):
@@ -44,13 +39,7 @@ class TestAnalytics:
         # Broker 1 creates a listing
         l_resp = client.post(
             "/listings",
-            json={
-                "title": "B1 Flat",
-                "price": 3000000,
-                "property_type": "flat",
-                "lat": 21.1702,
-                "lng": 72.8311,
-            },
+            json=listing_payload(title="B1 Flat", price=3000000),
             headers=auth_header(b1_token),
         )
         b1_id = l_resp.json()["broker_id"]

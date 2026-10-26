@@ -12,8 +12,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-reality_ai}
 
+    # Bound to localhost only — never publish the database on all interfaces.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -40,34 +41,38 @@ services:
 
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-reality_ai}
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-reality-ai-surat-2026}
+      # No default on purpose: startup fails unless SECRET_KEY is set in .env.
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env (at least 32 characters)}
       PLACEHOLDER_MODE: ${PLACEHOLDER_MODE:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-reality_ai}
 
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
     depends_on:
       db:
         condition: service_healthy
 
+    # Development only: live-reload the source from the host.
     volumes:
       - .:/app
 
-  # pgAdmin 4
+  # pgAdmin 4 — local database GUI
   db_admin:
-    image: dpage/pgadmin4:latest
+    image: dpage/pgadmin4:8.14
     container_name: reality_ai_pgadmin
     restart: on-failure
 
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@reality.ai
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?PGADMIN_DEFAULT_EMAIL must be set in .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD must be set in .env}
 
     ports:
-      - "5050:80"
+      - "127.0.0.1:5050:80"
 
     depends_on:
       - db

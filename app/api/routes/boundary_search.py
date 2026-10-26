@@ -14,6 +14,43 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Listings"])
 
+BOUNDARY_RESULT_LIMIT = 50
+
+
+class _NeverRaised(Exception):
+    """Placeholder for an AI exception class that isn't defined."""
+
+
+def boundary_listing_ids(db: Session, polygon: list[list[float]]) -> list[int]:
+    """IDs of listings inside *polygon*, by the AI's rule when it is installed.
+
+    Uses ``ai.rag.boundary_filter.get_candidates()`` so the map's boundary
+    search and ``/chat`` with a polygon can never disagree; falls back to the
+    equivalent PostGIS query (``ST_MakeValid`` + ``ST_Contains``) during
+    isolated backend development.  Shared by this route and ``/chat``.
+
+    Raises ``HTTPException`` 422 for a polygon the AI rejects and 503 when the
+    boundary filter's database query fails.
+    """
+    try:
+        from ai.rag import boundary_filter  # type: ignore[import-untyped]
+    except Exception as exc:  # ImportError, or a module that fails while importing
+        log = logger.warning if isinstance(exc, ImportError) else logger.exception
+        log("ai.rag.boundary_filter not available — using backend polygon query")
+        return geo_service.boundary_candidate_ids(db, polygon)
+
+    filter_error = getattr(boundary_filter, "BoundaryFilterError", _NeverRaised)
+    try:
+        return list(boundary_filter.get_candidates(polygon))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except filter_error:
+        logger.exception("Boundary filter failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Boundary search is temporarily unavailable",
+        )
+
 
 @router.post(
     "/listings/search-boundary",
@@ -24,16 +61,13 @@ def search_boundary(
     body: BoundarySearchRequest,
     db: Session = Depends(get_db),
 ) -> list[ListingResponse]:
-    """Return listings located within the hand-drawn polygon boundary.
+    """Return available / under-offer listings inside the hand-drawn polygon.
 
-    Coordinates must be a list of ``[lat, lng]`` pairs.  Catches invalid or
-    self-intersecting shapes and returns a 422 Unprocessable Entity error.
+    Coordinates are ``[lat, lng]`` pairs (3-1000 points; the ring is closed
+    automatically).  Self-crossing shapes are repaired, not rejected — the
+    same rule ``/chat`` applies through the AI module.
     """
-    try:
-        listings = geo_service.search_by_boundary(db, polygon=body.polygon)
-        return listings  # type: ignore[return-value]
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        )
+    ids = boundary_listing_ids(db, body.polygon)
+    return geo_service.visible_listings_by_ids(  # type: ignore[return-value]
+        db, sorted(ids), limit=BOUNDARY_RESULT_LIMIT
+    )
