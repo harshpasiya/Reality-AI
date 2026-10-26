@@ -234,3 +234,7 @@ This repo uses a **fork-and-pull-request** workflow, not direct pushes:
 4. Open a pull request from your fork's branch back into this repo's `main`.
 
 Full step-by-step commands are in [`docs/Reality-AI-Initial-Setup-Guide.md`](docs/Reality-AI-Initial-Setup-Guide.md).
+
+## License
+
+Released under the [MIT License](LICENSE).
