@@ -13,6 +13,15 @@ interface FormErrors {
   email?: string;
   password?: string;
   role?: string;
+  phone?: string;
+  form?: string;
+}
+
+/** Indian mobile in E.164, as the backend expects: +91 and 10 digits. */
+function normalisePhone(raw: string): string {
+  const digits = raw.replace(/[^\d+]/g, "");
+  if (/^\d{10}$/.test(digits)) return `+91${digits}`;
+  return digits;
 }
 
 export default function RegisterPage() {
@@ -61,8 +70,8 @@ export default function RegisterPage() {
     if (!password) {
       return "Password is required";
     }
-    if (password.length < 6) {
-      return "Password must be at least 6 characters";
+    if (password.length < 8) {
+      return "Password must be at least 8 characters";
     }
     return undefined;
   };
@@ -70,6 +79,14 @@ export default function RegisterPage() {
   const validateRole = (role: string): string | undefined => {
     if (!role || (role !== "customer" && role !== "broker")) {
       return "Please select a role";
+    }
+    return undefined;
+  };
+
+  const validatePhone = (phone: string): string | undefined => {
+    if (formData.role !== "broker" || !phone.trim()) return undefined;
+    if (!/^\+[1-9]\d{7,14}$/.test(normalisePhone(phone))) {
+      return "Enter a 10-digit mobile number, or +country code and number";
     }
     return undefined;
   };
@@ -85,6 +102,8 @@ export default function RegisterPage() {
     if (emailError) newErrors.email = emailError;
     if (passwordError) newErrors.password = passwordError;
     if (roleError) newErrors.role = roleError;
+    const phoneError = validatePhone(formData.phone ?? "");
+    if (phoneError) newErrors.phone = phoneError;
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -95,7 +114,7 @@ export default function RegisterPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
 
     // Real-time validation if touched
-    if (touched[name as keyof FormErrors]) {
+    if (touched[name as keyof typeof touched]) {
       if (name === "name") {
         setErrors((prev) => ({ ...prev, name: validateName(value) }));
       } else if (name === "email") {
@@ -135,7 +154,11 @@ export default function RegisterPage() {
     setErrors({});
 
     try {
-      const response = await registerUser(formData);
+      const phone =
+        formData.role === "broker" && formData.phone?.trim()
+          ? normalisePhone(formData.phone)
+          : undefined;
+      const response = await registerUser({ ...formData, phone });
 
       setAuth(response.access_token, response.user);
 
@@ -150,9 +173,7 @@ export default function RegisterPage() {
           ? error.message
           : "Registration failed. Please try again.";
 
-      setErrors({
-        email: message,
-      });
+      setErrors({ form: message });
     } finally {
       setIsLoading(false);
     }
@@ -450,6 +471,55 @@ export default function RegisterPage() {
                 </p>
               )}
             </fieldset>
+
+            {formData.role === "broker" && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="phone"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Business phone{" "}
+                  <span className="font-normal text-zinc-500">
+                    (recommended)
+                  </span>
+                </label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  placeholder="98765 43210"
+                  value={formData.phone ?? ""}
+                  onChange={handleChange}
+                  onBlur={() =>
+                    setErrors((prev) => ({
+                      ...prev,
+                      phone: validatePhone(formData.phone ?? ""),
+                    }))
+                  }
+                  aria-invalid={!!errors.phone}
+                  aria-describedby="phone-hint"
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                />
+                <p
+                  id="phone-hint"
+                  className={`text-xs ${errors.phone ? "text-red-600 dark:text-red-400" : "text-zinc-500"}`}
+                >
+                  {errors.phone ??
+                    "Shown only to customers who send you an enquiry."}
+                </p>
+              </div>
+            )}
+
+            {errors.form && (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+              >
+                {errors.form}
+              </div>
+            )}
 
             {/* Submit Button */}
             <button

@@ -24,7 +24,47 @@ function toInputValue(value: number | string | null | undefined): string {
   return value === null || value === undefined ? "" : String(value).trim();
 }
 
+/**
+ * Only logged-in brokers may use the (paid) Gemini call.  The token is checked
+ * by asking the backend who it belongs to, so this route never needs the JWT
+ * secret.  Returns an error Response, or null when the caller is a broker.
+ */
+async function requireBroker(request: Request): Promise<Response | null> {
+  const authorization = request.headers.get("authorization");
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  if (!authorization?.startsWith("Bearer ") || !apiUrl) {
+    return Response.json({ error: "Please log in again." }, { status: 401 });
+  }
+
+  try {
+    const me = await fetch(`${apiUrl}/auth/me`, {
+      headers: { authorization },
+      cache: "no-store",
+    });
+    if (!me.ok) {
+      return Response.json({ error: "Please log in again." }, { status: 401 });
+    }
+    const user = (await me.json()) as { role?: string };
+    if (user.role !== "broker") {
+      return Response.json(
+        { error: "Only brokers can use listing autofill." },
+        { status: 403 },
+      );
+    }
+  } catch {
+    return Response.json(
+      { error: "Can't reach the backend to check your login." },
+      { status: 503 },
+    );
+  }
+  return null;
+}
+
 export async function POST(request: Request) {
+  const denied = await requireBroker(request);
+  if (denied) return denied;
+
   let body: unknown;
 
   try {

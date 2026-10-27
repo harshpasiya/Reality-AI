@@ -6,6 +6,8 @@ import { HistoricalMessage } from "@/lib/api/chat";
 
 type ChatMessagesProps = {
   messages: HistoricalMessage[];
+  isSending?: boolean;
+  onRetry?: (text: string) => void;
   hoveredListingId?: number | null;
   hoveredCardKey?: string | null;
   onHoverListing?: (listingId: number | null) => void;
@@ -14,6 +16,8 @@ type ChatMessagesProps = {
 
 export default function ChatArea({
   messages,
+  isSending = false,
+  onRetry,
   hoveredListingId = null,
   hoveredCardKey = null,
   onHoverListing,
@@ -24,7 +28,7 @@ export default function ChatArea({
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isSending]);
 
   useEffect(() => {
     if (hoveredListingId === null) {
@@ -93,8 +97,8 @@ export default function ChatArea({
     >
       <div className="space-y-5">
         {messages.map((msg, index) => {
-          const formattedTime = msg.created_at
-            ? new Date(msg.created_at).toLocaleTimeString([], {
+          const formattedTime = msg.timestamp
+            ? new Date(msg.timestamp).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
               })
@@ -108,6 +112,12 @@ export default function ChatArea({
               time={formattedTime}
               listings={msg.listings}
               messageKey={msg.id || `msg-${index}`}
+              failed={msg.failed}
+              onRetry={
+                msg.failed && !isSending
+                  ? () => onRetry?.(msg.message)
+                  : undefined
+              }
               hoveredListingId={hoveredListingId}
               hoveredCardKey={hoveredCardKey}
               onHoverListing={onHoverListing}
@@ -115,6 +125,24 @@ export default function ChatArea({
             />
           );
         })}
+        {messages.length === 0 && !isSending && (
+          <p className="text-text-muted py-10 text-center text-sm">
+            Ask for a property, e.g. &ldquo;2 BHK in Vesu under 80 lakh&rdquo;.
+          </p>
+        )}
+        {isSending && (
+          <div
+            className="flex items-center gap-2 text-sm text-slate-500"
+            aria-live="polite"
+          >
+            <span className="flex gap-1" aria-hidden="true">
+              <span className="size-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+              <span className="size-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+              <span className="size-2 animate-bounce rounded-full bg-slate-400" />
+            </span>
+            Searching listings…
+          </div>
+        )}
         <div ref={endRef} />
       </div>
     </div>

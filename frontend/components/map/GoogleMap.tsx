@@ -8,9 +8,12 @@ import {
   Map,
   useMap,
 } from "@vis.gl/react-google-maps";
-import { Listing } from "@/lib/api/chat";
+import { MapPinOff } from "lucide-react";
+import type { Listing } from "@/lib/api/listings";
+import { formatPriceShort } from "@/lib/api/listings";
 import { cn } from "@/lib/utils";
 
+// Surat city centre.
 const DEFAULT_CENTER = {
   lat: 21.1702,
   lng: 72.8311,
@@ -18,53 +21,49 @@ const DEFAULT_CENTER = {
 
 const DEFAULT_ZOOM = 13;
 
+// Google's documented demo map ID: Advanced Markers work with only an API key.
+// Set NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID to use your own styled map instead.
+const FALLBACK_MAP_ID = "DEMO_MAP_ID";
+
 interface GoogleMapProps {
   listings?: Listing[];
   hoveredListingId?: number | null;
   onHoverListing?: (listingId: number | null) => void;
 }
 
-function getCoordinates(property: any) {
-  const lat = property.lat ?? property.location?.lat;
-  const lng = property.lng ?? property.location?.lng;
+type Coords = { lat: number; lng: number };
 
+function getCoordinates(listing: Listing): Coords | null {
+  const { lat, lng } = listing;
   if (typeof lat === "number" && typeof lng === "number") {
     return { lat, lng };
   }
   return null;
 }
 
-function getAverageCenter(listings: Listing[]) {
-  const validCoords = listings
-    .map(getCoordinates)
-    .filter(
-      (coords): coords is { lat: number; lng: number } => coords !== null,
-    );
-
-  if (validCoords.length === 0) return DEFAULT_CENTER;
-
-  const sum = validCoords.reduce(
-    (acc, curr) => ({
-      lat: acc.lat + curr.lat,
-      lng: acc.lng + curr.lng,
-    }),
-    { lat: 0, lng: 0 },
-  );
-
-  return {
-    lat: sum.lat / validCoords.length,
-    lng: sum.lng / validCoords.length,
-  };
-}
-
-function MapPanControl({ center }: { center: { lat: number; lng: number } }) {
+/** Fit the map to the listings whenever the result set changes. */
+function FitToListings({ points }: { points: Coords[] }) {
   const map = useMap();
 
   useEffect(() => {
-    if (map) {
-      map.panTo(center);
+    if (!map || points.length === 0) return;
+    if (points.length === 1) {
+      map.panTo(points[0]);
+      map.setZoom(15);
+      return;
     }
-  }, [map, center]);
+    const lats = points.map((p) => p.lat);
+    const lngs = points.map((p) => p.lng);
+    map.fitBounds(
+      {
+        north: Math.max(...lats),
+        south: Math.min(...lats),
+        east: Math.max(...lngs),
+        west: Math.min(...lngs),
+      },
+      80,
+    );
+  }, [map, points]);
 
   return null;
 }
@@ -75,14 +74,25 @@ export default function GoogleMap({
   onHoverListing,
 }: GoogleMapProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
+  const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || FALLBACK_MAP_ID;
 
-  const center = useMemo(() => getAverageCenter(listings), [listings]);
+  const points = useMemo(
+    () =>
+      listings
+        .map(getCoordinates)
+        .filter((coords): coords is Coords => coords !== null),
+    [listings],
+  );
 
-  if (!apiKey || !mapId) {
+  if (!apiKey) {
     return (
-      <div className="flex h-full w-full items-center justify-center">
-        Google Maps API configuration missing.
+      <div className="bg-surface-soft text-text-secondary flex h-full w-full flex-col items-center justify-center gap-2 px-6 text-center text-sm">
+        <MapPinOff className="h-6 w-6" aria-hidden="true" />
+        <p>The map is not configured.</p>
+        <p className="text-text-muted text-xs">
+          Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in frontend/.env.local. Results
+          still appear in the chat.
+        </p>
       </div>
     );
   }
@@ -91,70 +101,46 @@ export default function GoogleMap({
     <APIProvider apiKey={apiKey}>
       <Map
         mapId={mapId}
-        defaultCenter={center}
+        defaultCenter={DEFAULT_CENTER}
         defaultZoom={DEFAULT_ZOOM}
         gestureHandling="greedy"
         disableDefaultUI
         className="h-full w-full"
       >
-        <MapPanControl center={center} />
+        <FitToListings points={points} />
 
-        {listings.map((property, index) => {
-          const coords = getCoordinates(property);
+        {listings.map((listing) => {
+          const coords = getCoordinates(listing);
           if (!coords) return null;
 
-          const isHovered = hoveredListingId === property.id;
+          const isHovered = hoveredListingId === listing.id;
 
           return (
             <AdvancedMarker
-              key={`${property.id}-${index}`}
+              key={listing.id}
               position={coords}
-              title={property.title}
-              className="pointer-events-auto"
-              onMouseEnter={() => onHoverListing?.(property.id)}
+              title={listing.title}
+              zIndex={isHovered ? 10 : 1}
+              onMouseEnter={() => onHoverListing?.(listing.id)}
               onMouseLeave={() => onHoverListing?.(null)}
               style={{ pointerEvents: "auto", cursor: "pointer" }}
             >
               <Link
-                href={`/listings/${property.id}`}
-                className="block rounded-full focus:outline-none"
-                aria-label={`View ${property.title}`}
+                href={`/listings/${listing.id}`}
+                aria-label={`${listing.title}, ${formatPriceShort(listing.price)}`}
+                className={cn(
+                  "bg-accent relative block rounded-full border-2 border-white px-2.5 py-1 text-xs font-bold whitespace-nowrap text-white shadow-lg transition-transform duration-200",
+                  isHovered && "bg-accent-hover scale-110",
+                )}
               >
-                <div
+                {formatPriceShort(listing.price)}
+                <span
+                  aria-hidden="true"
                   className={cn(
-                    "relative flex size-11 items-center justify-center transition-all duration-200",
-                    isHovered && "scale-110",
+                    "bg-accent absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-r-2 border-b-2 border-white",
+                    isHovered && "bg-accent-hover",
                   )}
-                >
-                  <div
-                    className={cn(
-                      "bg-accent flex size-11 items-center justify-center rounded-full border-4 border-white text-white shadow-lg transition-all duration-200",
-                      isHovered &&
-                        "bg-accent-border shadow-[0_0_0_8px_rgba(111,99,200,0.15)]",
-                    )}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="size-5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M3 11.5 12 4l9 7.5" />
-                      <path d="M5.5 10.5V20h13v-9.5" />
-                      <path d="M9.5 20v-5h5v5" />
-                    </svg>
-                  </div>
-                  <div
-                    className={cn(
-                      "bg-accent absolute -bottom-1 h-3 w-3 rotate-45 border-r-4 border-b-4 border-white transition-colors duration-200",
-                      isHovered && "bg-accent-border",
-                    )}
-                  />
-                </div>
+                />
               </Link>
             </AdvancedMarker>
           );

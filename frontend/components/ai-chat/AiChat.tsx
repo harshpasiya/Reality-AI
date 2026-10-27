@@ -16,6 +16,7 @@ type AiChatProps = {
   onHoverCard?: (cardKey: string | null) => void;
   isLoading?: boolean;
   isSending?: boolean;
+  sendError?: string | null;
   onSendMessage: (text: string) => void;
 };
 
@@ -29,6 +30,7 @@ export default function AiChat({
   onHoverCard,
   isLoading = false,
   isSending = false,
+  sendError = null,
   onSendMessage,
 }: AiChatProps) {
   return (
@@ -73,6 +75,8 @@ export default function AiChat({
           ) : (
             <ChatMessages
               messages={messages}
+              isSending={isSending}
+              onRetry={onSendMessage}
               hoveredListingId={hoveredListingId}
               hoveredCardKey={hoveredCardKey}
               onHoverListing={onHoverListing}
@@ -80,6 +84,15 @@ export default function AiChat({
             />
           )}
         </div>
+
+        {sendError && (
+          <p
+            role="alert"
+            className="mx-4 mb-1 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700"
+          >
+            {sendError}
+          </p>
+        )}
 
         <ChatInput onSend={onSendMessage} disabled={isSending} />
       </div>

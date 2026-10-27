@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut } from "lucide-react";
+import {
+  ChevronDown,
+  LayoutDashboard,
+  LogOut,
+  Plus,
+  Search,
+} from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 
 function getInitials(name: string | undefined) {
@@ -17,11 +24,23 @@ function getInitials(name: string | undefined) {
     .toUpperCase();
 }
 
+const noopSubscribe = () => () => {};
+
+const itemClass =
+  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100";
+
 export default function UserMenu() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const [isOpen, setIsOpen] = useState(false);
+  // The login state lives in localStorage, which the server can't see; wait
+  // for the browser before choosing between "Log in" and the account menu.
+  const isMounted = useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,6 +71,29 @@ export default function UserMenu() {
     router.replace("/login");
   }
 
+  if (!isMounted) {
+    return <div className="h-11 w-16" aria-hidden="true" />;
+  }
+
+  if (!user) {
+    return (
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Link
+          href="/login"
+          className="rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100"
+        >
+          Log in
+        </Link>
+        <Link
+          href="/register"
+          className="bg-accent hover:bg-accent-hover rounded-lg px-3 py-2 text-white"
+        >
+          Sign up
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div ref={menuRef} className="relative">
       <button
@@ -60,10 +102,10 @@ export default function UserMenu() {
         aria-label="Open account menu"
         aria-expanded={isOpen}
         aria-haspopup="menu"
-        className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-slate-100"
+        className="flex items-center gap-2 rounded-lg bg-white/80 p-1 transition hover:bg-slate-100"
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-medium">
-          {getInitials(user?.name)}
+          {getInitials(user.name)}
         </span>
         <ChevronDown
           aria-hidden="true"
@@ -78,16 +120,49 @@ export default function UserMenu() {
         >
           <div className="border-b border-slate-100 px-3 py-2">
             <p className="truncate text-sm font-medium text-slate-900">
-              {user?.name}
+              {user.name}
             </p>
-            <p className="truncate text-xs text-slate-500">{user?.email}</p>
+            <p className="truncate text-xs text-slate-500">{user.email}</p>
           </div>
+
+          {user.role === "broker" ? (
+            <>
+              <Link
+                href="/broker/dashboard"
+                role="menuitem"
+                className={itemClass}
+                onClick={() => setIsOpen(false)}
+              >
+                <LayoutDashboard aria-hidden="true" className="h-4 w-4" />
+                Dashboard
+              </Link>
+              <Link
+                href="/broker/listings/create"
+                role="menuitem"
+                className={itemClass}
+                onClick={() => setIsOpen(false)}
+              >
+                <Plus aria-hidden="true" className="h-4 w-4" />
+                Add listing
+              </Link>
+            </>
+          ) : (
+            <Link
+              href="/"
+              role="menuitem"
+              className={itemClass}
+              onClick={() => setIsOpen(false)}
+            >
+              <Search aria-hidden="true" className="h-4 w-4" />
+              New search
+            </Link>
+          )}
 
           <button
             type="button"
             role="menuitem"
             onClick={handleLogout}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100"
+            className={itemClass}
           >
             <LogOut aria-hidden="true" className="h-4 w-4" />
             Log out

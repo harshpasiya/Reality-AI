@@ -1,3 +1,5 @@
+import { getResponseErrorMessage } from "./client";
+
 export type UserRole = "customer" | "broker";
 
 export type User = {
@@ -12,6 +14,8 @@ export type RegisterRequest = {
   email: string;
   password: string;
   role: UserRole;
+  /** Broker business phone in E.164 form, e.g. +919876543210. */
+  phone?: string;
 };
 
 export type RegisterResponse = {
@@ -46,7 +50,10 @@ export async function registerUser(
   );
 
   if (!response.ok) {
-    throw new Error("Registration failed");
+    // Show the backend's reason, e.g. "Email already registered".
+    throw new Error(
+      (await getResponseErrorMessage(response)) || "Registration failed",
+    );
   }
 
   return response.json();

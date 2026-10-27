@@ -1,59 +1,69 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useCallback, useEffect, useMemo, useState, use } from "react";
+import Link from "next/link";
 import { AiChat } from "@/components/ai-chat";
 import GoogleMap from "@/components/map/GoogleMap";
 import UserMenu from "@/components/UserMenu";
 import {
   getConversationHistory,
   sendChatMessage,
-  HistoricalMessage,
-  Listing,
+  type ChatListing,
+  type HistoricalMessage,
 } from "@/lib/api/chat";
+import { errorMessage, isApiError } from "@/lib/api/client";
 
 interface ChatPageProps {
   params: Promise<{ id: string }>;
 }
 
-function getLatestUniqueListings<T extends { id: number }>(items: T[]): T[] {
-  const latestById = new Map<number, T>();
-
-  for (const item of items) {
-    latestById.set(item.id, item);
+/** Listings of the most recent assistant reply that had any: the map shows these. */
+function latestResults(messages: HistoricalMessage[]): ChatListing[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.sender === "assistant" && msg.listings?.length) return msg.listings;
   }
-
-  return [...latestById.values()];
+  return [];
 }
 
 export default function ChatPage({ params }: ChatPageProps) {
-  const { id: conversationId } = use(params);
+  const { id } = use(params);
+  const conversationId = Number(id);
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [messages, setMessages] = useState<HistoricalMessage[]>([]);
-  const [listings, setListings] = useState<Listing[]>([]);
   const [hoveredListingId, setHoveredListingId] = useState<number | null>(null);
   const [hoveredCardKey, setHoveredCardKey] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const listings = useMemo(() => latestResults(messages), [messages]);
 
   useEffect(() => {
     async function fetchHistory() {
-      if (!conversationId) return;
+      if (!Number.isInteger(conversationId) || conversationId <= 0) {
+        setLoadError("This conversation doesn't exist.");
+        setIsLoadingHistory(false);
+        return;
+      }
 
       try {
         setIsLoadingHistory(true);
         const data = await getConversationHistory(conversationId);
-
-        setMessages(data.messages || []);
-
-        const allListings = (data.messages || []).flatMap(
-          (msg) => msg.listings || [],
+        setMessages(
+          (data.messages || []).map((msg, index) => ({
+            ...msg,
+            id: `h-${index}`,
+          })),
         );
-        const latestListings = getLatestUniqueListings(allListings);
-        console.log("Fetched listings from history:", latestListings);
-        setListings(latestListings);
       } catch (error) {
-        console.error("Failed to load conversation history:", error);
+        setLoadError(
+          isApiError(error, 404)
+            ? "This conversation doesn't exist or belongs to another account."
+            : errorMessage(error, "Couldn't load this conversation."),
+        );
       } finally {
         setIsLoadingHistory(false);
       }
@@ -62,47 +72,68 @@ export default function ChatPage({ params }: ChatPageProps) {
     fetchHistory();
   }, [conversationId]);
 
-  async function handleSendMessage(text: string) {
-    const trimmedMessage = text.trim();
-    if (!trimmedMessage || isSendingMessage) return;
+  const handleSendMessage = useCallback(
+    async (text: string) => {
+      const trimmedMessage = text.trim();
+      if (!trimmedMessage || isSendingMessage) return;
 
-    const optimisticUserMsg: HistoricalMessage = {
-      id: `temp-${Date.now()}`,
-      sender: "user",
-      message: trimmedMessage,
-      created_at: new Date().toISOString(),
-    };
+      const userMsgId = `u-${Date.now()}`;
+      setSendError(null);
+      setMessages((prev) => [
+        // Drop an earlier failed copy of the same text when retrying.
+        ...prev.filter((m) => !(m.failed && m.message === trimmedMessage)),
+        {
+          id: userMsgId,
+          sender: "user",
+          message: trimmedMessage,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+      setIsSendingMessage(true);
 
-    setMessages((prev) => [...prev, optimisticUserMsg]);
-    setIsSendingMessage(true);
+      try {
+        const response = await sendChatMessage({
+          conversation_id: conversationId,
+          message: trimmedMessage,
+          polygon: null,
+        });
 
-    try {
-      const response = await sendChatMessage({
-        conversation_id: conversationId,
-        message: trimmedMessage,
-        polygon: null,
-      });
-
-      const assistantMsg: HistoricalMessage = {
-        id: `msg-${Date.now()}`,
-        sender: "assistant",
-        message: response.reply,
-        created_at: new Date().toISOString(),
-        listings: response.listings,
-      };
-
-      setMessages((prev) => [...prev, assistantMsg]);
-
-      if (response.listings?.length) {
-        setListings((prev) =>
-          getLatestUniqueListings([...prev, ...response.listings]),
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `a-${Date.now()}`,
+            sender: "assistant",
+            message: response.reply,
+            timestamp: new Date().toISOString(),
+            listings: response.listings,
+          },
+        ]);
+      } catch (error) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === userMsgId ? { ...m, failed: true } : m)),
         );
+        setSendError(
+          errorMessage(error, "Your message couldn't be sent. Please retry."),
+        );
+      } finally {
+        setIsSendingMessage(false);
       }
-    } catch (error) {
-      console.error("Failed to send message:", error);
-    } finally {
-      setIsSendingMessage(false);
-    }
+    },
+    [conversationId, isSendingMessage],
+  );
+
+  if (loadError) {
+    return (
+      <main className="bg-surface-soft flex min-h-[100dvh] flex-col items-center justify-center gap-4 px-4 text-center">
+        <p className="text-text-primary text-lg font-semibold">{loadError}</p>
+        <Link
+          href="/"
+          className="bg-accent hover:bg-accent-hover rounded-xl px-5 py-2.5 text-sm font-medium text-white"
+        >
+          Start a new search
+        </Link>
+      </main>
+    );
   }
 
   return (
@@ -131,6 +162,7 @@ export default function ChatPage({ params }: ChatPageProps) {
         onHoverCard={setHoveredCardKey}
         isLoading={isLoadingHistory}
         isSending={isSendingMessage}
+        sendError={sendError}
         onSendMessage={handleSendMessage}
         isCollapsed={isCollapsed}
         onToggle={() => {

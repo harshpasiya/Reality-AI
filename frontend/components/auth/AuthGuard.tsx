@@ -42,7 +42,7 @@ export default function AuthGuard({ children, allowedRole }: AuthGuardProps) {
     }
 
     if (!isAuthorized) {
-      router.replace(user?.role === "broker" ? "/broker" : "/");
+      router.replace(user?.role === "broker" ? "/broker/dashboard" : "/");
     }
   }, [hasHydrated, accessToken, isAuthorized, user, pathname, router]);
 

@@ -3,12 +3,29 @@
 import { useState, FormEvent, ChangeEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { loginUser } from "@/lib/api/auth";
+import { loginUser, type UserRole } from "@/lib/api/auth";
 import { useAuthStore } from "@/stores/authStore";
 
 interface FormErrors {
   email?: string;
   password?: string;
+}
+
+/**
+ * Where to go after logging in: the page that sent the user here
+ * (?redirect=/chat/12), or the role's home page.  Only same-site paths are
+ * followed, so a crafted link can't bounce the user to another website.
+ */
+function afterLoginPath(role: UserRole): string {
+  const home = role === "broker" ? "/broker/dashboard" : "/";
+  if (typeof window === "undefined") return home;
+
+  const redirect = new URLSearchParams(window.location.search).get("redirect");
+  if (!redirect || !redirect.startsWith("/") || redirect.startsWith("//")) {
+    return home;
+  }
+  const brokerPage = redirect.startsWith("/broker/");
+  return brokerPage === (role === "broker") ? redirect : home;
 }
 
 export default function LoginPage() {
@@ -113,7 +130,7 @@ export default function LoginPage() {
 
       setAuth(response.access_token, response.user);
 
-      router.push(response.user.role === "broker" ? "/broker/dashboard" : "/");
+      router.push(afterLoginPath(response.user.role));
     } catch (error) {
       setAuthError(
         error instanceof Error

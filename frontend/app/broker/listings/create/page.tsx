@@ -1,17 +1,26 @@
 "use client";
 
-import { useState, FormEvent, ChangeEvent, FocusEvent, ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+  FormEvent,
+  ChangeEvent,
+  FocusEvent,
+  ReactNode,
+} from "react";
 import { ArrowLeft, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   createListing,
-  ListingResponse,
   CreateListingRequest,
   BackendPropertyType,
   extractListingDetails,
+  getLocalities,
   uploadListingImage,
-  uploadListingVideo,
+  type Listing,
+  type Locality,
 } from "@/lib/api/listings";
+import { errorMessage } from "@/lib/api/client";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 
@@ -49,18 +58,29 @@ const INITIAL_FORM_DATA: CreateListingFormData = {
 };
 
 const SAMPLE_PROPERTY_DESCRIPTION =
-  "Independent 3-bedroom house for sale in Andheri East, Mumbai, priced at INR 18,000,000. It has 3 bedrooms and 2 bathrooms on the ground floor, with 1,200 sq ft carpet area, 1,500 sq ft built-up area, and a 1,800 sq ft plot. Coordinates: latitude 19.1197, longitude 72.8468.";
+  "Spacious 3 BHK flat for sale in Vesu, Surat, priced at 85 lakh. It is on the 7th floor with 2 bathrooms, 1,250 sq ft carpet area and 1,500 sq ft built-up area, close to VR Mall. Coordinates: latitude 21.1545, longitude 72.7757.";
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const IMAGE_NAME_RE = /\.(jpe?g|png)$/i;
+
+const isBlank = (value: string) => value.trim() === "";
 
 function validateField(
   name: keyof CreateListingFormData,
   value: string,
   data: CreateListingFormData,
 ): string | undefined {
+  const isFlat = data.property_type === "flat";
+  const n = Number(value);
+
   switch (name) {
     case "title":
       if (!value.trim()) return "Property title is required";
       if (value.trim().length < 5) {
         return "Title must be at least 5 characters";
+      }
+      if (value.trim().length > 200) {
+        return "Keep the title under 200 characters";
       }
       return;
 
@@ -75,103 +95,72 @@ function validateField(
       if (!value) return "Please select a property type";
       return;
 
-    case "price": {
-      const n = Number(value);
-
-      if (!value || Number.isNaN(n) || n <= 0) {
+    case "price":
+      if (isBlank(value) || Number.isNaN(n) || n <= 0) {
         return "Please enter a valid positive price";
       }
-
       return;
-    }
 
-    case "bedrooms": {
-      const n = Number(value);
-
-      if (!value || Number.isNaN(n) || n < 0 || !Number.isInteger(n)) {
-        return "Please enter a valid number of bedrooms";
+    case "bedrooms":
+      // The AI search filters "2 BHK" on this, so flats must have it.
+      if (isBlank(value)) {
+        return isFlat ? "Bedrooms are required for a flat" : undefined;
       }
-
+      if (!Number.isInteger(n) || n < 1 || n > 10) {
+        return "Enter a whole number from 1 to 10";
+      }
       return;
-    }
 
-    case "bathrooms": {
-      const n = Number(value);
-
-      if (!value || Number.isNaN(n) || n < 0 || !Number.isInteger(n)) {
-        return "Please enter a valid number of bathrooms";
+    case "bathrooms":
+      if (isBlank(value)) return;
+      if (!Number.isInteger(n) || n < 0 || n > 20) {
+        return "Enter a whole number from 0 to 20";
       }
-
       return;
-    }
 
-    case "floor_number": {
-      if (!value && value !== "0") {
-        return "Floor number is required";
-      }
-
-      const n = Number(value);
-
-      if (Number.isNaN(n) || !Number.isInteger(n)) {
+    case "floor_number":
+      if (isBlank(value)) return;
+      if (!Number.isInteger(n) || n < -5 || n > 200) {
         return "Please enter a valid floor number";
       }
-
       return;
-    }
 
-    case "carpet_area": {
-      const n = Number(value);
-
-      if (!value || Number.isNaN(n) || n <= 0) {
-        return "Please enter a valid carpet area";
+    case "carpet_area":
+      if (isBlank(value)) {
+        return isFlat ? "Carpet area is required for a flat" : undefined;
       }
-
+      if (Number.isNaN(n) || n <= 0) return "Please enter a valid carpet area";
       return;
-    }
 
-    case "built_up_area": {
-      const n = Number(value);
-
-      if (!value || Number.isNaN(n) || n <= 0) {
+    case "built_up_area":
+      if (isBlank(value)) return;
+      if (Number.isNaN(n) || n <= 0)
         return "Please enter a valid built-up area";
-      }
-
-      if (data.carpet_area && n < Number(data.carpet_area)) {
+      if (!isBlank(data.carpet_area) && n < Number(data.carpet_area)) {
         return "Built-up area cannot be less than carpet area";
       }
-
       return;
-    }
 
-    case "plot_area": {
-      const n = Number(value);
-
-      if (!value || Number.isNaN(n) || n <= 0) {
-        return "Please enter a valid plot area";
+    case "plot_area":
+      if (isBlank(value)) {
+        return data.property_type === "house_land"
+          ? "Plot area is required for a house or plot"
+          : undefined;
       }
-
+      if (Number.isNaN(n) || n <= 0) return "Please enter a valid plot area";
       return;
-    }
 
-    case "lat": {
-      const n = Number(value);
-
-      if (!value || Number.isNaN(n) || n < -90 || n > 90) {
-        return "Latitude must be between -90 and 90";
+    case "lat":
+      if (isBlank(value) || Number.isNaN(n) || n < -90 || n > 90) {
+        return "Pick a locality or enter a latitude between -90 and 90";
       }
-
       return;
-    }
 
-    case "lng": {
-      const n = Number(value);
-
-      if (!value || Number.isNaN(n) || n < -180 || n > 180) {
-        return "Longitude must be between -180 and 180";
+    case "lng":
+      if (isBlank(value) || Number.isNaN(n) || n < -180 || n > 180) {
+        return "Pick a locality or enter a longitude between -180 and 180";
       }
-
       return;
-    }
 
     default:
       return;
@@ -192,6 +181,11 @@ function validateForm(data: CreateListingFormData): FormErrors {
   return errors;
 }
 
+/** Blank optional fields are sent as null, never as 0. */
+function optionalNumber(value: string): number | null {
+  return isBlank(value) ? null : Number(value);
+}
+
 function toCreateListingRequest(
   data: CreateListingFormData,
 ): CreateListingRequest {
@@ -199,35 +193,28 @@ function toCreateListingRequest(
     throw new Error("Please select a property type.");
   }
 
+  const bedrooms = optionalNumber(data.bedrooms);
+  const bathrooms = optionalNumber(data.bathrooms);
+
   return {
     title: data.title.trim(),
-
     description: data.description.trim() || null,
-
     price: Number(data.price),
-
     property_type: data.property_type,
-
-    carpet_area: Number(data.carpet_area),
-
-    built_up_area: Number(data.built_up_area),
-
-    plot_area: Number(data.plot_area),
-
-    floor_number: Number(data.floor_number),
-
-    rooms: {
-      bedrooms: Number(data.bedrooms),
-      bathrooms: Number(data.bathrooms),
-    },
-
+    carpet_area: optionalNumber(data.carpet_area),
+    built_up_area: optionalNumber(data.built_up_area),
+    plot_area: optionalNumber(data.plot_area),
+    floor_number: optionalNumber(data.floor_number),
+    // Open plots have no rooms at all.
+    rooms:
+      bedrooms === null && bathrooms === null
+        ? null
+        : {
+            ...(bedrooms !== null && { bedrooms }),
+            ...(bathrooms !== null && { bathrooms }),
+          },
     lat: Number(data.lat),
-
     lng: Number(data.lng),
-
-    images: [],
-
-    video_tour_url: null,
   };
 }
 
@@ -246,11 +233,7 @@ function formatPrice(val: string) {
 }
 
 function getApiErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Unable to create listing. Please try again.";
+  return errorMessage(error, "Unable to create listing. Please try again.");
 }
 
 const inputClass = (hasError: boolean) =>
@@ -267,16 +250,30 @@ type FieldProps = {
   children: ReactNode;
   hint?: string;
   className?: string;
+  required?: boolean;
 };
 
-function Field({ label, name, error, children, hint, className }: FieldProps) {
+function Field({
+  label,
+  name,
+  error,
+  children,
+  hint,
+  className,
+  required = true,
+}: FieldProps) {
   return (
     <div className={`space-y-1 ${className ?? ""}`}>
       <label
         htmlFor={name}
         className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
       >
-        {label} <span className="text-red-500">*</span>
+        {label}{" "}
+        {required ? (
+          <span className="text-red-500">*</span>
+        ) : (
+          <span className="text-xs font-normal text-zinc-400">(optional)</span>
+        )}
       </label>
 
       {children}
@@ -304,13 +301,49 @@ export default function BrokerCreateListingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
-  const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [uploadNote, setUploadNote] = useState<string | null>(null);
+  const [localities, setLocalities] = useState<Locality[]>([]);
+  const [locality, setLocality] = useState("");
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [createdListing, setCreatedListing] = useState<ListingResponse | null>(
-    null,
-  );
+  const [createdListing, setCreatedListing] = useState<Listing | null>(null);
+
+  useEffect(() => {
+    getLocalities()
+      .then(setLocalities)
+      .catch(() => setLocalities([]));
+  }, []);
+
+  const isPlot = formData.property_type === "house_land";
+
+  function pickLocality(name: string) {
+    setLocality(name);
+    const place = localities.find((l) => l.name === name);
+    if (!place) return;
+    setFormData((prev) => ({
+      ...prev,
+      lat: place.lat.toFixed(6),
+      lng: place.lng.toFixed(6),
+    }));
+    setErrors((prev) => ({ ...prev, lat: undefined, lng: undefined }));
+  }
+
+  function addImages(files: File[]) {
+    const rejected = files.filter(
+      (f) => !IMAGE_NAME_RE.test(f.name) || f.size > MAX_IMAGE_BYTES,
+    );
+    setImageError(
+      rejected.length
+        ? `Skipped ${rejected.map((f) => f.name).join(", ")}: photos must be JPG or PNG, at most 5 MB.`
+        : null,
+    );
+    setSelectedImages((previous) => [
+      ...previous,
+      ...files.filter((f) => !rejected.includes(f)),
+    ]);
+  }
 
   const handleExtractDetails = async () => {
     setExtractionError(null);
@@ -439,39 +472,32 @@ export default function BrokerCreateListingPage() {
     setIsLoading(true);
 
     try {
-      if (
-        selectedImages.some((file) => !/\.(jpe?g|png|webp)$/i.test(file.name))
-      ) {
-        throw new Error("Property photos must be JPG, PNG, or WEBP files.");
-      }
-
-      if (selectedVideo && !/\.(mp4|webm)$/i.test(selectedVideo.name)) {
-        throw new Error("The virtual tour must be an MP4 or WEBM file.");
-      }
-
-      const images = await Promise.all(
-        selectedImages.map(async (file) => {
-          const upload = await uploadListingImage(file);
-          return upload.url;
-        }),
-      );
-      const videoTourUrl = selectedVideo
-        ? await uploadListingVideo(selectedVideo)
-        : null;
-      const payload: CreateListingRequest = {
-        ...toCreateListingRequest(formData),
-        images,
-        video_tour_url: videoTourUrl,
-      };
-
+      const payload = toCreateListingRequest(formData);
       const listing = await createListing(payload);
+
+      // Photos are attached to the listing after it exists.  A failed photo
+      // doesn't undo the listing; the broker is told which ones to re-add.
+      const failed: string[] = [];
+      for (const file of selectedImages) {
+        try {
+          await uploadListingImage(listing.id, file);
+        } catch {
+          failed.push(file.name);
+        }
+      }
+      setUploadNote(
+        failed.length
+          ? `${failed.length} photo(s) could not be uploaded: ${failed.join(", ")}.`
+          : null,
+      );
 
       setCreatedListing(listing);
       setIsSuccess(true);
 
       setFormData(INITIAL_FORM_DATA);
       setSelectedImages([]);
-      setSelectedVideo(null);
+      setImageError(null);
+      setLocality("");
       setErrors({});
       setTouched({});
       setSubmitError(null);
@@ -508,7 +534,15 @@ export default function BrokerCreateListingPage() {
 
           {isSuccess && createdListing && (
             <div className="mb-6 flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-400">
-              <p>Listing created successfully.</p>
+              <p>
+                Listing created. Customers can find it in the AI chat within a
+                minute.
+                {uploadNote && (
+                  <span className="mt-1 block text-amber-700">
+                    {uploadNote}
+                  </span>
+                )}
+              </p>
 
               <Link
                 href={`/listings/${createdListing.id}`}
@@ -566,7 +600,7 @@ export default function BrokerCreateListingPage() {
                   setPropertyDescription(event.target.value);
                   setExtractionError(null);
                 }}
-                placeholder="For example: A spacious 3 BHK apartment in Bandra, Mumbai, on the 5th floor. It has 1,150 sq ft carpet area, 1,420 sq ft built-up area, 2 bathrooms, and is priced at ₹2.4 crore..."
+                placeholder="For example: A spacious 3 BHK flat in Adajan, Surat, on the 5th floor. It has 1,150 sq ft carpet area, 1,420 sq ft built-up area, 2 bathrooms, and is priced at ₹95 lakh..."
                 className={`${inputClass(!!extractionError)} resize-y`}
                 aria-describedby={
                   extractionError ? "extraction-error" : "description-limit"
@@ -717,14 +751,15 @@ export default function BrokerCreateListingPage() {
               <Field
                 label="Bedrooms"
                 name="bedrooms"
+                required={!isPlot}
                 error={touched.bedrooms ? errors.bedrooms : undefined}
               >
                 <input
                   type="number"
                   id="bedrooms"
                   name="bedrooms"
-                  min="0"
-                  max="50"
+                  min="1"
+                  max="10"
                   step="1"
                   value={formData.bedrooms}
                   onChange={handleChange}
@@ -739,6 +774,7 @@ export default function BrokerCreateListingPage() {
               <Field
                 label="Bathrooms"
                 name="bathrooms"
+                required={false}
                 error={touched.bathrooms ? errors.bathrooms : undefined}
               >
                 <input
@@ -761,6 +797,7 @@ export default function BrokerCreateListingPage() {
               <Field
                 label="Floor Number"
                 name="floor_number"
+                required={false}
                 error={touched.floor_number ? errors.floor_number : undefined}
               >
                 <input
@@ -783,6 +820,7 @@ export default function BrokerCreateListingPage() {
               <Field
                 label="Carpet Area (sq ft)"
                 name="carpet_area"
+                required={!isPlot}
                 error={touched.carpet_area ? errors.carpet_area : undefined}
               >
                 <input
@@ -804,6 +842,7 @@ export default function BrokerCreateListingPage() {
               <Field
                 label="Built-up Area (sq ft)"
                 name="built_up_area"
+                required={false}
                 error={touched.built_up_area ? errors.built_up_area : undefined}
               >
                 <input
@@ -825,6 +864,7 @@ export default function BrokerCreateListingPage() {
               <Field
                 label="Plot Area (sq ft)"
                 name="plot_area"
+                required={isPlot}
                 error={touched.plot_area ? errors.plot_area : undefined}
               >
                 <input
@@ -843,6 +883,37 @@ export default function BrokerCreateListingPage() {
                 />
               </Field>
 
+              <div className="space-y-1 sm:col-span-2">
+                <label
+                  htmlFor="locality"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Locality
+                </label>
+                <select
+                  id="locality"
+                  value={locality}
+                  onChange={(e) => pickLocality(e.target.value)}
+                  disabled={localities.length === 0}
+                  className={inputClass(false)}
+                >
+                  <option value="">
+                    {localities.length
+                      ? "Choose a Surat locality to fill in the coordinates"
+                      : "Localities unavailable: enter coordinates below"}
+                  </option>
+                  {localities.map((l) => (
+                    <option key={l.name} value={l.name}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-zinc-500">
+                  Fills in the area&apos;s centre. For the exact spot, copy the
+                  coordinates from Google Maps (right-click the building).
+                </p>
+              </div>
+
               <Field
                 label="Latitude"
                 name="lat"
@@ -856,7 +927,7 @@ export default function BrokerCreateListingPage() {
                   value={formData.lat}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  placeholder="e.g. 19.0760"
+                  placeholder="e.g. 21.1545"
                   className={inputClass(!!(touched.lat && errors.lat))}
                 />
               </Field>
@@ -874,7 +945,7 @@ export default function BrokerCreateListingPage() {
                   value={formData.lng}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  placeholder="e.g. 72.8777"
+                  placeholder="e.g. 72.7757"
                   className={inputClass(!!(touched.lng && errors.lng))}
                 />
               </Field>
@@ -884,7 +955,8 @@ export default function BrokerCreateListingPage() {
               <div>
                 <h2 className="text-sm font-semibold">Property media</h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Add photos and an optional virtual tour video.
+                  Listings with photos get far more enquiries. The first photo
+                  is the cover.
                 </p>
               </div>
 
@@ -898,28 +970,43 @@ export default function BrokerCreateListingPage() {
                 <input
                   id="listing-images"
                   type="file"
-                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                  accept=".jpg,.jpeg,.png,image/jpeg,image/png"
                   multiple
                   disabled={isLoading}
                   onChange={(event) => {
-                    const files = Array.from(event.currentTarget.files ?? []);
-                    setSelectedImages((previous) => [...previous, ...files]);
+                    addImages(Array.from(event.currentTarget.files ?? []));
                     event.currentTarget.value = "";
                     setSubmitError(null);
                   }}
                   className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100 dark:text-zinc-400 dark:file:bg-blue-950/50 dark:file:text-blue-300"
                 />
-                <p className="text-xs text-zinc-500">
-                  Select one or more JPG, PNG, or WEBP images.
+                <p
+                  className={`text-xs ${imageError ? "text-red-600" : "text-zinc-500"}`}
+                  role={imageError ? "alert" : undefined}
+                >
+                  {imageError ?? "JPG or PNG, up to 5 MB each."}
                 </p>
                 {selectedImages.length > 0 && (
-                  <ul className="space-y-1">
+                  <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                     {selectedImages.map((file, index) => (
                       <li
                         key={`${file.name}-${file.lastModified}-${index}`}
-                        className="flex items-center justify-between gap-3 rounded-md bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800"
+                        className="group relative overflow-hidden rounded-lg border border-zinc-200"
                       >
-                        <span className="truncate">{file.name}</span>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={file.name}
+                          className="aspect-square w-full object-cover"
+                          onLoad={(e) =>
+                            URL.revokeObjectURL(e.currentTarget.src)
+                          }
+                        />
+                        {index === 0 && (
+                          <span className="absolute top-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            Cover
+                          </span>
+                        )}
                         <button
                           type="button"
                           disabled={isLoading}
@@ -930,7 +1017,7 @@ export default function BrokerCreateListingPage() {
                               ),
                             )
                           }
-                          className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50 dark:text-red-400"
+                          className="absolute top-1 right-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-red-600 hover:bg-white disabled:opacity-50"
                           aria-label={`Remove ${file.name}`}
                         >
                           Remove
@@ -938,43 +1025,6 @@ export default function BrokerCreateListingPage() {
                       </li>
                     ))}
                   </ul>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="listing-video"
-                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                >
-                  Virtual tour video
-                </label>
-                <input
-                  id="listing-video"
-                  type="file"
-                  accept=".mp4,.webm,video/mp4,video/webm"
-                  disabled={isLoading}
-                  onChange={(event) => {
-                    setSelectedVideo(event.currentTarget.files?.[0] ?? null);
-                    event.currentTarget.value = "";
-                    setSubmitError(null);
-                  }}
-                  className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100 dark:text-zinc-400 dark:file:bg-blue-950/50 dark:file:text-blue-300"
-                />
-                <p className="text-xs text-zinc-500">
-                  Optional. Choose one MP4 or WEBM video.
-                </p>
-                {selectedVideo && (
-                  <div className="flex items-center justify-between gap-3 rounded-md bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800">
-                    <span className="truncate">{selectedVideo.name}</span>
-                    <button
-                      type="button"
-                      disabled={isLoading}
-                      onClick={() => setSelectedVideo(null)}
-                      className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50 dark:text-red-400"
-                    >
-                      Remove
-                    </button>
-                  </div>
                 )}
               </div>
             </section>
@@ -996,7 +1046,11 @@ export default function BrokerCreateListingPage() {
               >
                 {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
 
-                {isLoading ? "Creating..." : "Create Listing"}
+                {isLoading
+                  ? selectedImages.length
+                    ? "Creating and uploading photos..."
+                    : "Creating..."
+                  : "Create Listing"}
               </button>
             </div>
           </form>

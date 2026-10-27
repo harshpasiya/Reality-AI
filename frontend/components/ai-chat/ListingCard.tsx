@@ -2,13 +2,19 @@
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Listing } from "@/lib/api/chat";
-import { Bed, Bath, Maximize2, MapPin } from "lucide-react";
+import type { ChatListing } from "@/lib/api/chat";
+import {
+  formatPriceShort,
+  formatPropertyType,
+  listingImageUrls,
+  STATUS_LABELS,
+} from "@/lib/api/listings";
+import { Bed, Bath, Maximize2, Building2 } from "lucide-react";
 import PropertyImage from "@/components/PropertyImage";
 
 interface ListingCardProps {
-  listing: Listing;
-  onSelect?: (listing: Listing) => void;
+  listing: ChatListing;
+  onSelect?: (listing: ChatListing) => void;
   cardKey?: string;
   isHovered?: boolean;
   onHoverChange?: (isHovered: boolean) => void;
@@ -21,12 +27,10 @@ export default function ListingCard({
   isHovered = false,
   onHoverChange,
 }: ListingCardProps) {
-  const formattedPrice = new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(listing.price);
-  const imageSrc = listing.images?.find((image) => image.trim())?.trim();
+  const imageSrc = listingImageUrls(listing)[0];
+  const bedrooms = listing.rooms?.bedrooms ?? listing.bhk ?? null;
+  const bathrooms = listing.rooms?.bathrooms ?? null;
+  const area = listing.carpet_area ?? listing.plot_area ?? null;
 
   return (
     <Link
@@ -44,22 +48,30 @@ export default function ListingCard({
           "border-accent-border bg-accent-soft ring-accent/20 shadow-[0_10px_25px_rgba(111,99,200,0.12)] ring-2",
       )}
     >
-      <PropertyImage
-        src={imageSrc}
-        alt={`${listing.title} property photo`}
-        className="h-36 w-full rounded-xl"
-        sizes="(max-width: 640px) 100vw, 400px"
-      />
+      <div className="relative">
+        <PropertyImage
+          src={imageSrc}
+          alt={`${listing.title} property photo`}
+          className="h-36 w-full rounded-xl"
+          sizes="(max-width: 640px) 100vw, 400px"
+        />
+        {listing.status === "under_offer" && (
+          <span className="absolute top-2 left-2 rounded-md bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white">
+            {STATUS_LABELS.under_offer}
+          </span>
+        )}
+      </div>
 
       <div className="flex items-start justify-between gap-2">
-        <div>
+        <div className="min-w-0">
           <h4 className="group-hover:text-accent line-clamp-1 text-sm leading-snug font-semibold text-slate-800 transition-colors">
             {listing.title}
           </h4>
           <p className="mt-0.5 line-clamp-1 flex items-center gap-1 text-xs text-slate-500">
-            <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
-            {listing.property_type.toUpperCase()} • Floor{" "}
-            {listing.floor_number ?? "N/A"}
+            <Building2 className="h-3 w-3 shrink-0 text-slate-400" />
+            {formatPropertyType(listing.property_type)}
+            {listing.floor_number !== null &&
+              ` • Floor ${listing.floor_number}`}
           </p>
         </div>
         <span
@@ -68,34 +80,38 @@ export default function ListingCard({
             isHovered && "bg-accent text-white",
           )}
         >
-          {formattedPrice}
+          {formatPriceShort(listing.price)}
         </span>
       </div>
 
-      <p className="line-clamp-2 text-xs leading-relaxed text-slate-600">
-        {listing.description}
-      </p>
+      {listing.description && (
+        <p className="line-clamp-2 text-xs leading-relaxed text-slate-600">
+          {listing.description}
+        </p>
+      )}
 
-      <div className="flex items-center gap-3 border-t border-slate-100 pt-1 text-xs text-slate-500">
-        {listing.rooms?.bedrooms && (
-          <div className="flex items-center gap-1">
-            <Bed className="h-3.5 w-3.5 text-slate-400" />
-            <span>{listing.rooms.bedrooms} Bed</span>
-          </div>
-        )}
-        {listing.rooms?.bathrooms && (
-          <div className="flex items-center gap-1">
-            <Bath className="h-3.5 w-3.5 text-slate-400" />
-            <span>{listing.rooms.bathrooms} Bath</span>
-          </div>
-        )}
-        {listing.carpet_area && (
-          <div className="flex items-center gap-1">
-            <Maximize2 className="h-3.5 w-3.5 text-slate-400" />
-            <span>{listing.carpet_area} sq ft</span>
-          </div>
-        )}
-      </div>
+      {(bedrooms !== null || bathrooms !== null || area !== null) && (
+        <div className="flex items-center gap-3 border-t border-slate-100 pt-1 text-xs text-slate-500">
+          {bedrooms !== null && (
+            <div className="flex items-center gap-1">
+              <Bed className="h-3.5 w-3.5 text-slate-400" />
+              <span>{bedrooms} BHK</span>
+            </div>
+          )}
+          {bathrooms !== null && (
+            <div className="flex items-center gap-1">
+              <Bath className="h-3.5 w-3.5 text-slate-400" />
+              <span>{bathrooms} Bath</span>
+            </div>
+          )}
+          {area !== null && (
+            <div className="flex items-center gap-1">
+              <Maximize2 className="h-3.5 w-3.5 text-slate-400" />
+              <span>{Math.round(area).toLocaleString("en-IN")} sq ft</span>
+            </div>
+          )}
+        </div>
+      )}
     </Link>
   );
 }

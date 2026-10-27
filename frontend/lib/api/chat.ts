@@ -1,52 +1,44 @@
 import { apiClient } from "./client";
+import type { Listing } from "./listings";
 
-export interface Listing {
-  id: number;
-  title: string;
-  description: string;
-  price: number;
-  property_type: string;
-  carpet_area?: number | null;
-  built_up_area?: number | null;
-  plot_area?: number | null;
-  floor_number?: number | null;
-  rooms: {
-    bedrooms: number;
-    bathrooms: number;
-    balconies?: number;
-  };
-  lat: number;
-  lng: number;
-  broker_id: number;
-  amenities: Record<string, boolean>;
-  created_at: string;
-  images?: string[] | null;
-  video_tour_url?: string | null;
+/** A listing in a chat reply: the backend adds how the AI search found it. */
+export interface ChatListing extends Listing {
+  bhk?: number | null;
+  match_note?:
+    "exact" | "relaxed_radius" | "relaxed_bhk" | "relaxed_locality" | null;
+  distance_score?: number | null;
 }
 
+export type { Listing };
+
 export interface ChatMessageRequest {
-  conversation_id: string | null;
+  conversation_id: number | null;
   message: string;
   polygon: [number, number][] | null;
 }
 
 export interface ChatMessageResponse {
-  conversation_id: string;
+  conversation_id: number;
   reply: string;
-  listings: Listing[];
+  listings: ChatListing[];
 }
 
 export interface HistoricalMessage {
-  id: string;
+  /** Client-side key only; the backend does not number messages. */
+  id?: string;
   sender: "user" | "assistant";
   message: string;
-  created_at: string;
-  listings?: Listing[];
+  timestamp: string;
+  listings?: ChatListing[];
+  /** Set on a message that failed to send, so the UI can offer a retry. */
+  failed?: boolean;
 }
 
 export interface ConversationHistoryResponse {
-  conversation_id: string;
+  conversation_id: number;
+  user_id: number;
   messages: HistoricalMessage[];
+  listings: Listing[];
 }
 
 export function sendChatMessage(
@@ -59,7 +51,7 @@ export function sendChatMessage(
 }
 
 export function getConversationHistory(
-  conversationId: string,
+  conversationId: number,
 ): Promise<ConversationHistoryResponse> {
   return apiClient(`/chat/${conversationId}`, {
     method: "GET",

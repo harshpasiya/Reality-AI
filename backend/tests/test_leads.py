@@ -38,6 +38,21 @@ class TestCreateLead:
         again = client.post(f"/listings/{listing_id}/leads", json={}, headers=auth_header(token))
         assert again.status_code == 409
 
+    def test_customer_can_see_own_lead_again(self, client: TestClient):
+        _, _, listing_id = _broker_with_listing(client)
+        token = register_customer(client, email=unique_email("mine_cust"))["access_token"]
+        mine = f"/listings/{listing_id}/leads/mine"
+
+        assert client.get(mine, headers=auth_header(token)).status_code == 404
+        client.post(f"/listings/{listing_id}/leads", json={"message": "Hi"}, headers=auth_header(token))
+        resp = client.get(mine, headers=auth_header(token))
+        assert resp.status_code == 200
+        assert resp.json()["message"] == "Hi"
+        assert resp.json()["broker"] == {"name": "Test Broker", "phone": PHONE}
+
+        other = register_customer(client, email=unique_email("other_cust"))["access_token"]
+        assert client.get(mine, headers=auth_header(other)).status_code == 404
+
     def test_phone_absent_from_public_listing(self, client: TestClient):
         _, _, listing_id = _broker_with_listing(client)
         body = client.get(f"/listings/{listing_id}").text

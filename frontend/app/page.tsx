@@ -1,19 +1,21 @@
 "use client";
 
-import { FormEvent, useLayoutEffect, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Sparkles, Loader2 } from "lucide-react";
 
 import AuthGuard from "@/components/auth/AuthGuard";
 import AppHeader from "@/components/AppHeader";
 import { sendChatMessage } from "@/lib/api/chat";
+import { errorMessage } from "@/lib/api/client";
 import { useAuthStore } from "@/stores/authStore";
 
+// Each of these finds listings in the seeded Surat data.
 const SUGGESTIONS = [
-  "3 BHK in Vesu, Surat under ₹80L",
-  "Penthouse near Canal Road with terrace garden",
-  "2 BHK furnished apartment near VIP Road",
-  "Villa in Adajan with private parking",
+  "2 BHK in Vesu under ₹80 lakh",
+  "3 BHK flat in Adajan with parking",
+  "Plot in Pal under 50 lakh",
+  "Flat near VR Mall under 1 crore",
 ];
 
 export default function HomePage() {
@@ -21,6 +23,14 @@ export default function HomePage() {
   const user = useAuthStore((state) => state.user);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // "/?q=..." pre-fills the search box (used by "Find similar" on a listing).
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    // Deferred: the page is pre-rendered without the query string.
+    if (q) queueMicrotask(() => setInput(q.slice(0, 1000)));
+  }, []);
 
   useLayoutEffect(() => {
     if (user?.role === "broker") {
@@ -38,6 +48,7 @@ export default function HomePage() {
     if (!query || isLoading) return;
 
     setIsLoading(true);
+    setError(null);
 
     try {
       const response = await sendChatMessage({
@@ -46,14 +57,9 @@ export default function HomePage() {
         polygon: null,
       });
 
-      if (response?.conversation_id) {
-        router.push(`/chat/${response.conversation_id}`);
-      } else {
-        console.error("No conversation_id received in response.");
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error("Chat failed:", error);
+      router.push(`/chat/${response.conversation_id}`);
+    } catch (err) {
+      setError(errorMessage(err, "Search failed. Please try again."));
       setIsLoading(false);
     }
   }
@@ -136,6 +142,20 @@ export default function HomePage() {
               </button>
             </div>
           </form>
+
+          <div aria-live="polite" className="mt-3 min-h-5 text-sm">
+            {isLoading && (
+              <p className="text-text-secondary">
+                Understanding your request and searching listings. This takes a
+                few seconds…
+              </p>
+            )}
+            {error && (
+              <p role="alert" className="text-red-600">
+                {error}
+              </p>
+            )}
+          </div>
 
           {/* Quick Suggestion Pills */}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2">

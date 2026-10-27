@@ -14,6 +14,8 @@ interface ChatMessageProps {
   time?: string;
   listings?: HistoricalMessage["listings"];
   messageKey?: string;
+  failed?: boolean;
+  onRetry?: () => void;
   hoveredListingId?: number | null;
   hoveredCardKey?: string | null;
   onHoverListing?: (listingId: number | null) => void;
@@ -26,7 +28,8 @@ export default function ChatMessage({
   time,
   listings,
   messageKey,
-  hoveredListingId = null,
+  failed = false,
+  onRetry,
   hoveredCardKey = null,
   onHoverListing,
   onHoverCard,
@@ -43,9 +46,11 @@ export default function ChatMessage({
           className={cn(
             "rounded-[20px] px-4 py-3 text-[15px] leading-relaxed shadow-xs",
             BUBBLE_STYLES[role],
+            failed && "opacity-60",
           )}
         >
-          <p className="break-words">{content}</p>
+          {/* Plain text on purpose: replies are never rendered as HTML. */}
+          <p className="break-words whitespace-pre-line">{content}</p>
         </div>
 
         {hasListings && (
@@ -81,7 +86,25 @@ export default function ChatMessage({
             isAssistant ? "text-left" : "text-right",
           )}
         >
-          {time}
+          {failed ? (
+            <span className="text-red-600">
+              Not sent
+              {onRetry && (
+                <>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="font-semibold underline underline-offset-2"
+                  >
+                    Retry
+                  </button>
+                </>
+              )}
+            </span>
+          ) : (
+            time
+          )}
         </span>
       </div>
     </div>
