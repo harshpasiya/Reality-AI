@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-manrope);
+
+  /*
+   * Brand
+   */
+  --color-accent: #6f63c8;
+  --color-accent-hover: #5f53b7;
+  --color-accent-soft: #f1effd;
+  --color-accent-border: #9b8df0;
+
+  /*
+   * Text
+   */
+  --color-text-primary: #252c38;
+  --color-text-secondary: #687385;
+  --color-text-muted: #8c96a5;
+
+  /*
+   * Surfaces
+   */
+  --color-surface: #ffffff;
+  --color-surface-soft: #f8f8fa;
+
+  /*
+   * Borders
+   */
+  --color-border: #e7e9ee;
+  --color-border-subtle: #f0f1f4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #ffffff;
+  color: #252c38;
+  font-family: var(--font-manrope), Arial, Helvetica, sans-serif;
+}
+
+@utility fade-bottom {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    black calc(100% - 16px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    black calc(100% - 16px),
+    transparent 100%
+  );
+}
+
+@utility glass {
+  border: 1px solid rgb(255 255 255 / 0.6);
+  background-color: rgb(255 255 255 / 0.7);
+  backdrop-filter: blur(24px) saturate(1.5);
+}
+
+@theme {
+  --shadow-chat-sheet:
+    0 -16px 48px rgba(0, 0, 0, 0.22), 0 -4px 16px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+
+  --shadow-chat-panel:
+    0 24px 60px rgba(0, 0, 0, 0.28), 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
