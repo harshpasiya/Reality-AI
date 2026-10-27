@@ -113,6 +113,7 @@ from app.api.routes import (  # noqa: E402
     chat,
     leads,
     listings,
+    localities,
 )
 
 app.include_router(auth.router)
@@ -122,3 +123,4 @@ app.include_router(chat.router)
 app.include_router(boundary_search.router)
 app.include_router(analytics.router)
 app.include_router(brokers.router)
+app.include_router(localities.router)

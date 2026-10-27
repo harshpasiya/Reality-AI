@@ -16,21 +16,17 @@ try:
     broker_email = "admin@reality.ai"
     broker_password = "adminpassword123"
 
-    existing_broker = db.query(Broker).filter(Broker.email == broker_email).first()
-    if existing_broker:
-        db.delete(existing_broker)
-        db.commit()
-
-    broker = Broker(
-        name="Admin Broker",
-        email=broker_email,
-        password_hash=hash_password(broker_password)
-    )
-    db.add(broker)
+    # Re-running resets the password instead of deleting the account, which
+    # would fail once it owns listings, leads or conversations.
+    broker = db.query(Broker).filter(Broker.email == broker_email).first()
+    if broker is None:
+        broker = Broker(name="Admin Broker", email=broker_email)
+        db.add(broker)
+    broker.password_hash = hash_password(broker_password)
     db.commit()
     db.refresh(broker)
 
-    print(f"✅ Demo Broker Created:")
+    print("[OK] Demo broker ready:")
     print(f"   ID: {broker.id}")
     print(f"   Email: {broker.email}")
     print(f"   Password: {broker_password}")
@@ -39,21 +35,17 @@ try:
     customer_email = "customer@reality.ai"
     customer_password = "customerpassword123"
 
-    existing_customer = db.query(Customer).filter(Customer.email == customer_email).first()
-    if existing_customer:
-        db.delete(existing_customer)
-        db.commit()
-
-    customer = Customer(
-        name="Demo Customer",
-        email=customer_email,
-        password_hash=hash_password(customer_password)
-    )
-    db.add(customer)
+    # Re-running resets the password instead of deleting the account, which
+    # would fail once it owns listings, leads or conversations.
+    customer = db.query(Customer).filter(Customer.email == customer_email).first()
+    if customer is None:
+        customer = Customer(name="Demo Customer", email=customer_email)
+        db.add(customer)
+    customer.password_hash = hash_password(customer_password)
     db.commit()
     db.refresh(customer)
 
-    print(f"✅ Demo Customer Created:")
+    print("[OK] Demo customer ready:")
     print(f"   ID: {customer.id}")
     print(f"   Email: {customer.email}")
     print(f"   Password: {customer_password}")

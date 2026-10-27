@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.schemas.listing import ListingResponse
+
 
 class BrokerBase(BaseModel):
     """Shared fields across broker schemas."""
@@ -26,3 +28,19 @@ class BrokerResponse(BrokerBase):
 
     id: int
     created_at: datetime
+
+
+class BrokerPublicProfile(BaseModel):
+    """What any visitor may see about a broker (``GET /brokers/{id}/public``).
+
+    Email and phone are deliberately absent: a customer gets the phone number
+    only by sending an enquiry (``POST /listings/{id}/leads``).
+    """
+
+    id: int
+    name: str
+    member_since: datetime
+    active_listings: int = Field(..., description="Available and under-offer listings")
+    listings: list[ListingResponse] = Field(
+        default_factory=list, description="Newest visible listings, at most 50"
+    )

@@ -1,4 +1,4 @@
-"""Broker dashboard routes — GET /brokers/{id}/listings and GET /brokers/{id}/leads."""
+"""Broker routes — the public profile, and the dashboard's own listings and leads."""
 
 import logging
 from typing import Optional
@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.broker import Broker
+from app.models.listing import VISIBLE_STATUSES, Listing
+from app.schemas.broker import BrokerPublicProfile
 from app.schemas.lead import BrokerLeadItem, LeadResponse, LeadStatus
 from app.schemas.listing import BrokerListingItem, ListingResponse, ListingStatus
 from app.services import lead_service, listing_service
@@ -25,6 +27,42 @@ def _require_self(broker_id: int, current_user) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only access your own broker account",
         )
+
+
+PUBLIC_LISTINGS_LIMIT = 50
+
+
+@router.get(
+    "/brokers/{broker_id}/public",
+    response_model=BrokerPublicProfile,
+    summary="A broker's public profile and visible listings (no login needed)",
+)
+def get_broker_public_profile(
+    broker_id: int,
+    db: Session = Depends(get_db),
+) -> BrokerPublicProfile:
+    """Name, joining date and visible listings; never email or phone."""
+    broker = db.get(Broker, broker_id)
+    if broker is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Broker with id {broker_id} not found",
+        )
+    visible = db.query(Listing).filter(
+        Listing.broker_id == broker_id, Listing.status.in_(VISIBLE_STATUSES)
+    )
+    listings = (
+        visible.order_by(Listing.created_at.desc(), Listing.id.desc())
+        .limit(PUBLIC_LISTINGS_LIMIT)
+        .all()
+    )
+    return BrokerPublicProfile(
+        id=broker.id,
+        name=broker.name,
+        member_since=broker.created_at,
+        active_listings=visible.count(),
+        listings=[ListingResponse.model_validate(l) for l in listings],
+    )
 
 
 @router.get(
