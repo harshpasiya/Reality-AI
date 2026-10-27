@@ -32,7 +32,7 @@ The current phase uses **synthetic data** for both listings and brokers, so the 
 
 - **Conversational property search** — a fine-tuned, retrieval-augmented chat assistant that answers from real listing data instead of guessing, and stays scoped to real estate rather than acting as a general-purpose chatbot.
 - **Split-screen chat + map experience** — chat and results update together, live, as the conversation evolves.
-- **Rough-boundary search** — customers can hand-draw a search area directly on the map instead of relying only on radius search; this combines with the chat assistant so a drawn boundary and a text query narrow results together.
+- **Rough-boundary search** — the backend and AI accept a hand-drawn polygon with the chat message, so a drawn boundary and a text query narrow results together. The map drawing tool in the frontend is still to be built.
 - **Nearby-amenities enrichment** — each listing is enriched with cached nearby points of interest (schools, hospitals, restaurants, transit, parks) via the Google Places API, looked up once at listing-creation time — never fetched live during a search or chat request.
 - **Broker publishing & analytics** — brokers create and manage listings and see views/leads per listing.
 - **Production-phase roadmap item (not yet built):** AI-generated, layout-accurate room visualizations (naked and furnished) for an explorable view of a property — see each track's roadmap document for the proposed design.
@@ -41,7 +41,7 @@ The current phase uses **synthetic data** for both listings and brokers, so the 
 
 ```mermaid
 flowchart TD
-    subgraph Frontend["React Frontend — Persons 3 & 4"]
+    subgraph Frontend["Next.js Frontend — Persons 3 & 4"]
         CUI[Customer chat + map UI]
         LDV[Listing detail + amenities view]
         BUI[Broker dashboard UI]
@@ -79,119 +79,119 @@ A broker's published listing is written to the database, then both **embedded** 
 
 | Layer | Technology |
 |---|---|
-| Frontend | React (Vite), Zustand, Google Maps JavaScript API + Drawing Library |
+| Frontend | Next.js 16 (App Router) + React 19, Tailwind CSS 4, Zustand, `@vis.gl/react-google-maps` |
 | Backend | FastAPI, SQLAlchemy + GeoAlchemy2, Alembic, python-jose + passlib |
-| Database | PostgreSQL + PostGIS (geospatial) + pgvector (embeddings) |
-| AI / RAG | sentence-transformers (embeddings), custom retrieval over pgvector |
-| Fine-tuning | QLoRA via PEFT + bitsandbytes + trl on Qwen/Qwen3-4B-Instruct-2507 for query understanding (sentence -> JSON filters), debugged on Qwen/Qwen3-1.7B; replies are templated, not generated (see `ai/docs/ADR-002-qwen3-nlu-model.md`) |
-| Compute | Local GPU (RTX 3050, Person 1) for debugging; Kaggle Notebooks (free tier) for full fine-tuning runs |
-| External APIs | Google Maps JavaScript API, Google Places API (Nearby Search) |
-| Data | Faker-generated synthetic listings, brokers, and customers using real-world coordinates |
-| Infra | Docker + Docker Compose |
-
-Full per-track detail (file structure, endpoint contracts, setup commands) lives in each track's implementation guide under `docs/`.
+| Database | PostgreSQL 16 + PostGIS (geospatial) + pgvector (embeddings), in Docker |
+| AI / RAG | sentence-transformers (all-MiniLM-L6-v2), retrieval over pgvector with SQL filters |
+| Fine-tuning | QLoRA via PEFT + bitsandbytes + trl on Qwen/Qwen3-4B-Instruct-2507 for query understanding (sentence -> JSON filters); replies are templated, not generated (see `ai/docs/ADR-002-qwen3-nlu-model.md`) |
+| Compute | Local GPU (RTX 3050, Person 1) runs the model; Kaggle Notebooks (free tier) for training |
+| External APIs | Google Maps JavaScript API, Google Places API (Nearby Search), optional Gemini for listing autofill |
+| Data | Synthetic Surat listings, brokers and customers with real-world coordinates |
 
 ## Repository Structure
 
+One repository for the whole platform. The backend and frontend were imported
+from their original repositories with full history (`git subtree`), so every
+teammate's commits are kept.
+
 ```
-reality-ai/
-├── ai/                      # Person 1 — RAG, fine-tuning, amenities service
-│   ├── embeddings/
-│   ├── rag/
-│   ├── amenities/
-│   ├── finetune/
-│   │   └── configs/
-│   └── inference/
-├── backend/                 # Person 2 — FastAPI, PostgreSQL/PostGIS
-│   └── app/
-│       ├── core/
-│       ├── models/
-│       ├── schemas/
-│       ├── api/
-│       │   └── routes/
-│       ├── services/
-│       └── db/
-│           └── migrations/
-├── frontend/                # Persons 3 & 4 — React app
-│   └── src/
-│       ├── api/
-│       ├── components/
-│       │   ├── chat/
-│       │   ├── map/
-│       │   ├── listings/
-│       │   └── broker/
-│       ├── pages/
-│       ├── state/
-│       └── styles/
-├── docs/                    # Roadmaps, API contract, architecture notes
-├── .gitignore
-└── README.md
+Reality-AI/
+├── ai/          # Person 1 — query understanding (Qwen3 + rules), retrieval, embeddings, amenities
+├── backend/     # Person 2 — FastAPI app, Alembic migrations, seed data, tests
+├── frontend/    # Persons 3 & 4 — Next.js app (chat + map, listing pages, broker dashboard)
+├── db/          # Database image (PostGIS + pgvector) and init script
+├── docker-compose.yml   # The database
+├── start.ps1    # Starts everything on the GPU machine
+└── .env.example # Settings shared by ai/ and backend/
 ```
 
 ## Getting Started
 
-New to the project? Start with [`docs/Reality-AI-Initial-Setup-Guide.md`](docs/Reality-AI-Initial-Setup-Guide.md) for the full fork-based GitHub workflow. The condensed version:
+The AI model needs an NVIDIA GPU (4 GB is enough). Everything runs on the GPU
+machine; other machines can work on the frontend and backend with
+`NLU_BACKEND=rules` or `PLACEHOLDER_MODE=true`.
 
-```bash
-# 1. Fork the repo on GitHub, then clone your fork
-git clone https://github.com/<your-username>/reality-ai.git
-cd reality-ai
+**Prerequisites:** Python 3.12, Node.js 20.9+, Docker Desktop, Git.
+
+**1. One-time setup** (from the repo root, PowerShell):
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install -r ai\requirements.txt -r backend\requirements.txt
+copy .env.example .env      # then set SECRET_KEY (instructions inside)
 ```
 
-**Backend (Person 2):**
-```bash
-cd backend
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-docker-compose up -d db
-alembic upgrade head
-python -m app.db.seed_synthetic_data
-uvicorn app.main:app --reload
+Put the trained LoRA adapter in `ai/finetune/adapters/` (see `ai/docs/ai-architecture.md`).
+For the map, add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to `frontend/.env.local`
+(`start.ps1` creates the file from `frontend/.env.example`).
+
+**2. Start everything:**
+
+```powershell
+.\start.ps1
 ```
 
-**AI / RAG (Person 1):**
-```bash
-cd ai
-python -m venv venv-ai && source venv-ai/bin/activate
-pip install -r requirements.txt
-python -m embeddings.embed_listings
-```
+It starts the database, applies migrations, seeds demo data on the first run,
+embeds listings, and opens the backend (http://localhost:8000, API docs at
+`/docs`) and the frontend (http://localhost:3000) in their own windows.
+`.\start.ps1 -Reseed` resets the demo data; `.\start.ps1 -Dev` runs the
+frontend with hot reload.
 
-**Frontend (Persons 3 & 4):**
-```bash
-cd frontend
-npm install
-cp .env.example .env
-npm run dev
-```
+Demo logins: `customer@reality.ai` / `customerpassword123` and
+`admin@reality.ai` / `adminpassword123` (broker).
 
-Once running: the backend serves on `http://localhost:8000`, and the frontend dev server (Vite) on `http://localhost:5173`.
+**Tests:**
+
+```powershell
+.venv\Scripts\python -m pytest ai                      # AI: 208 tests
+cd backend; ..\.venv\Scripts\python -m pytest tests     # backend: 90 tests (needs the database)
+cd frontend; npx pnpm lint; npx pnpm build             # frontend checks
+```
 
 ## Environment Variables
 
-| Variable | Used by | Purpose |
+The repo-root `.env` is read by both `ai/` and `backend/`; the frontend uses
+`frontend/.env.local`. Both have commented examples (`.env.example`).
+
+| Variable | File | Purpose |
 |---|---|---|
-| `DATABASE_URL` | backend, ai | PostgreSQL connection string |
-| `SECRET_KEY` | backend | JWT signing |
-| `GOOGLE_PLACES_API_KEY` | ai | Nearby-amenities lookups |
-| `VITE_API_BASE_URL` | frontend | Backend base URL |
-| `VITE_GOOGLE_MAPS_API_KEY` | frontend | Maps JS API + Drawing Library |
-| `HF_TOKEN` (optional) | ai | Pulling/pushing the fine-tuned adapter via Hugging Face Hub |
+| `DATABASE_URL` | `.env` | PostgreSQL connection string (Docker database on port 5433) |
+| `SECRET_KEY` | `.env` | Signs login tokens; at least 32 characters |
+| `PLACEHOLDER_MODE` | `.env` | `false` runs the real AI; `true` returns canned replies |
+| `NLU_BACKEND` | `.env` | `hybrid` (model + rules, GPU) or `rules` (no GPU) |
+| `CORS_ORIGINS` | `.env` | Frontend URLs allowed to call the API |
+| `GOOGLE_PLACES_API_KEY` | `.env` | Nearby-amenities lookups (once per listing, never during chat) |
+| `HF_TOKEN` (optional) | `.env` | Hugging Face downloads |
+| `NEXT_PUBLIC_API_URL` | `frontend/.env.local` | Backend URL |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | `frontend/.env.local` | Maps JavaScript API |
+| `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` (optional) | `frontend/.env.local` | Custom map style |
+| `GEMINI_API_KEY` (optional) | `frontend/.env.local` | Broker listing autofill (server-side only) |
 
 ## API Reference (Summary)
 
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/auth/register` / `/auth/login` | Broker or customer auth |
+| `GET` | `/auth/me` | The logged-in user |
+| `POST` | `/chat` | Customer chat message; AI search + reply |
+| `GET` | `/chat/{id}` | Conversation history |
 | `POST` | `/listings` | Broker publishes a listing; triggers embedding + amenities caching |
-| `GET` | `/listings/{id}` | Fetch a listing, including cached amenities |
+| `GET` / `PATCH` / `DELETE` | `/listings/{id}` | Fetch (public), edit or withdraw a listing |
+| `PATCH` | `/listings/{id}/status` | available / under_offer / sold / withdrawn |
+| `POST` | `/listings/{id}/images` | Upload a photo (JPEG/PNG, 5 MB) |
 | `GET` | `/listings/search` | Radius-based search |
 | `POST` | `/listings/search-boundary` | Polygon (hand-drawn) boundary search |
-| `POST` | `/chat` | Customer chat message; orchestrates RAG + LLM |
-| `GET` | `/brokers/{id}/analytics` | Views and leads per listing |
+| `POST` | `/listings/{id}/leads` | "Contact broker": enquiry + broker phone |
+| `GET` | `/listings/{id}/leads/mine` | The customer's own enquiry, to see the phone again |
+| `GET` | `/brokers/{id}/public` | Public broker profile and visible listings |
+| `GET` | `/brokers/{id}/analytics` / `listings` / `leads` | Broker dashboard data |
+| `PATCH` | `/leads/{id}` | Broker updates an enquiry's follow-up status |
+| `GET` | `/localities` | Surat areas the AI search knows |
 
-Full request/response shapes are documented in `docs/` per track.
+Interactive documentation with every request and response shape is at
+http://localhost:8000/docs while the backend runs.
 
 ## Roadmap
 

@@ -257,9 +257,8 @@ before the reply and the reply itself is instant. Machines without a GPU use
   stack.
 - **Schema.** The AI SQL targets the backend's `listing` table (`location`
   PostGIS point, bedrooms inside `rooms` JSON, `status`); the shared SQL
-  fragments live in `ai/rag/listing_sql.py`. The local `db/init.sql` mirrors
-  the subset of that table the AI reads and writes, so a change to the
-  backend schema must be copied there too.
+  fragments live in `ai/rag/listing_sql.py`. The schema comes from the
+  backend's Alembic migrations (`backend/app/db/migrations`).
 - **Library versions.** The adapter was saved with transformers 5.x on
   Kaggle; the local transformers 4.57 cannot read its tokenizer config, so the
   loader falls back to the base model's identical tokenizer.

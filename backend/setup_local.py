@@ -39,4 +39,7 @@ if result.returncode != 0:
     sys.exit("  Alembic upgrade failed - see the output above.")
 
 print("\n Setup complete!")
-print("  Start the server:  .venv\\Scripts\\uvicorn.exe app.main:app --reload --host 0.0.0.0 --port 8000")
+# No --reload: the reloader starts a second process, which would load a
+# second copy of the AI model onto the GPU.
+print("  Start everything:  .\\start.ps1   (from the repo root)")
+print("  Backend only:      python -m uvicorn --app-dir backend app.main:app --port 8000   (from the repo root)")

@@ -1,60 +1,25 @@
-"""Seed script — inserts 210 fake listings for Surat, Gujarat into the local dev database.
+"""Surat seed data (neighbourhoods, price bands, templates) and the seeding entry point.
 
-Designed to be safely re-runnable: deletes all existing rows before inserting.
-Run this after `docker-compose up -d` to populate the DB for local AI testing.
+The data here is the source of truth for the AI side: ``ai/nlu/gazetteer.py``
+and the backend's ``app/db/surat_reference_data.py`` were generated from it,
+and tests check they still agree.
 
-Usage (from repo root, with .venv active):
+In the monorepo the database schema belongs to the backend (Alembic), so this
+script no longer creates a table of its own.  Running it applies the backend
+migrations and runs the backend seed (500 listings, brokers, customers, leads
+built from this data):
+
+    docker compose up -d
     python -m ai.embeddings._test_seed
-
-Writes to the `listing` table, shaped like Person 2's backend table
-(PostGIS `location`, bedrooms in `rooms` JSON, `status`). The script applies
-db/init.sql itself, so it works on an existing Docker volume too — no
-`down -v` needed:
-    docker-compose up -d
-    python -m ai.embeddings._test_seed
-    python -m ai.embeddings.embed_listings     # new rows need embeddings again
-
-Every 20th listing is marked `sold` so the search's status filter is exercised.
-The old local `listings` table (lat/lng/bhk columns) is no longer used; it is
-left in place and can be dropped by hand.
+    python -m ai.embeddings.embed_listings     # new rows need embeddings
 """
 
 from __future__ import annotations
 
-import json
-import os
 import random
 import sys
 from decimal import Decimal
 from pathlib import Path
-
-from dotenv import load_dotenv
-
-load_dotenv()
-
-INIT_SQL = Path(__file__).resolve().parents[2] / "db" / "init.sql"
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    print(
-        "\n[ERROR] DATABASE_URL is not set.\n"
-        "  1. Make sure docker-compose is running: docker-compose up -d\n"
-        "  2. Copy .env.example to .env and set:\n"
-        "       DATABASE_URL=postgresql://reality_ai:reality_ai_secret@localhost:5433/reality_ai\n"
-    )
-    sys.exit(1)
-
-try:
-    from sqlalchemy import create_engine, text
-except ImportError:
-    print("[ERROR] sqlalchemy not installed. Run: pip install sqlalchemy psycopg2-binary")
-    sys.exit(1)
-
-try:
-    from faker import Faker
-except ImportError:
-    print("[ERROR] faker not installed. Run: pip install faker")
-    sys.exit(1)
 
 # ---------------------------------------------------------------------------
 # Surat neighbourhood anchor points (real coordinates, Gujarat, India)
@@ -337,80 +302,18 @@ def generate_listings(n: int = 210) -> list[dict]:
     return listings
 
 
+BACKEND_DIR = Path(__file__).resolve().parents[2] / "backend"
+
+
 def main() -> None:
-    try:
-        engine = create_engine(DATABASE_URL, connect_args={"connect_timeout": 5})
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-    except Exception as exc:
-        print(
-            f"\n[ERROR] Could not connect to the database.\n"
-            f"  Make sure the Docker container is running:\n"
-            f"    docker-compose up -d\n"
-            f"  And that DATABASE_URL in .env is correct:\n"
-            f"    DATABASE_URL=postgresql://reality_ai:reality_ai_secret@localhost:5433/reality_ai\n"
-            f"\n  Original error: {exc}\n"
-        )
-        sys.exit(1)
+    """Apply the backend migrations, then run the backend seed with --reset."""
+    import subprocess
 
-    listings = generate_listings(210)
-
-    with engine.begin() as conn:
-        # init.sql only runs on a fresh Docker volume; every statement in it is
-        # IF NOT EXISTS, so re-applying it here creates the listing table on an
-        # older volume and is a no-op otherwise. exec_driver_sql: the file's
-        # "::" casts must not be parsed as bind parameters.
-        conn.exec_driver_sql(INIT_SQL.read_text(encoding="utf-8"))
-        deleted = conn.execute(text("DELETE FROM listing")).rowcount
-        if deleted:
-            print(f"  Cleared {deleted} existing row(s) from listing table.")
-
-        insert_rows = [
-            {
-                "title": l["title"],
-                "description": l["description"],
-                "price": l["price"],
-                "property_type": l["property_type"],
-                "rooms": json.dumps({"bedrooms": l["bhk"]}) if l["bhk"] is not None else None,
-                "lat": l["lat"],
-                "lng": l["lng"],
-                "status": "sold" if i % 20 == 19 else "available",
-            }
-            for i, l in enumerate(listings)
-        ]
-        conn.execute(
-            text(
-                """
-                INSERT INTO listing (title, description, price, property_type, rooms, location, status)
-                VALUES (:title, :description, :price, :property_type, CAST(:rooms AS JSON),
-                        ST_SetSRID(ST_MakePoint(:lng, :lat), 4326), :status)
-                """
-            ),
-            insert_rows,
-        )
-
-    # ── Summary ────────────────────────────────────────────────────────────
-    prices = [float(l["price"]) for l in listings]
-    flat_count  = sum(1 for l in listings if l["property_type"] == "flat")
-    land_count  = len(listings) - flat_count
-
-    by_area: dict[str, int] = {}
-    for l in listings:
-        area_name = l["_neighbourhood"]
-        by_area[area_name] = by_area.get(area_name, 0) + 1
-
-    print(f"\n[OK] Seeded {len(listings)} Surat listings into '{DATABASE_URL.split('/')[-1]}':")
-    print(f"   Property types : {flat_count} flat | {land_count} house_land")
-    print(f"   Price range    : Rs.{min(prices):,.0f}  --  Rs.{max(prices):,.0f}")
-    print(f"   Avg price      : Rs.{sum(prices)/len(prices):,.0f}")
-    print(f"   Neighbourhoods : {len(NEIGHBOURHOODS)} areas across Surat city")
-    print(f"   Listings per area:")
-    for area_name, count in sorted(by_area.items(), key=lambda x: -x[1]):
-        print(f"     {area_name:<18} {count:>3}")
-    print(f"\n   Sample listings:")
-    for l in random.sample(listings, 5):
-        print(f"     [{l['property_type'][:4]}] {l['title']}  (Rs.{float(l['price']):,.0f})")
-    print()
+    for step in (["setup_local.py"], ["-m", "app.db.seed_synthetic_data", "--reset"]):
+        result = subprocess.run([sys.executable, *step], cwd=BACKEND_DIR)
+        if result.returncode != 0:
+            sys.exit(f"[ERROR] {' '.join(step)} failed; see the output above.")
+    print("\nNext: python -m ai.embeddings.embed_listings")
 
 
 if __name__ == "__main__":
