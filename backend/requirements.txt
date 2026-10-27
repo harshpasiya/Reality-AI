@@ -1,0 +1,39 @@
+# FastAPI web framework for high-performance REST APIs
+fastapi>=0.110.0,<1.0.0
+# ASGI server for production and reloading dev server
+uvicorn[standard]>=0.28.0,<1.0.0
+# SQL toolkit and ORM mapping database models to tables
+sqlalchemy>=2.0.0,<3.0.0
+# Spatial extensions for SQLAlchemy supporting PostGIS geometry queries
+geoalchemy2>=0.14.0,<1.0.0
+# PostgreSQL vector similarity search extension integration
+pgvector>=0.2.5,<1.0.0
+# Database migration tool for SQLAlchemy
+alembic>=1.13.0,<2.0.0
+# JOSE implementation in Python for JWT encoding and decoding
+python-jose[cryptography]>=3.4.0,<4.0.0  # 3.4 fixes CVE-2024-33663 / CVE-2024-33664
+# Password hashing library supporting bcrypt algorithm
+passlib[bcrypt]>=1.7.4,<2.0.0
+# IMPORTANT: passlib 1.7.4 is incompatible with bcrypt>=4.1.0 (API change causes ValueError).
+# Pin to 4.0.x until passlib is replaced or upgraded.
+bcrypt>=4.0.0,<4.1.0
+# Synthetic data generator for populating test listings and users
+faker>=24.0.0,<25.0.0
+# Reads key-value pairs from .env file and sets them as environment variables
+python-dotenv>=1.0.0,<2.0.0
+# Pydantic extension for settings management using environment variables
+pydantic-settings>=2.2.0,<3.0.0
+# Testing framework for unit and integration test suites
+pytest>=8.1.0,<9.0.0
+# Next-generation HTTP client for async requests and test client support
+httpx>=0.27.0,<1.0.0
+# Geometric shapes manipulation and polygon validation
+shapely>=2.0.0,<3.0.0
+# Email validation for Pydantic EmailStr
+email-validator>=2.1.0,<3.0.0
+# Form data parser for FastAPI OAuth2PasswordRequestForm login
+python-multipart>=0.0.9,<1.0.0
+# PostgreSQL driver used by the backend engine (postgresql+psycopg://)
+psycopg[binary]>=3.1.0,<4.0.0
+# PostgreSQL driver used by the AI modules' engines (plain postgresql:// URLs) after the merge
+psycopg2-binary>=2.9.0,<3.0.0

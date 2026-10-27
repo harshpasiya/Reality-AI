@@ -1,0 +1,4 @@
+# Ensure entrypoint.sh uses Unix line endings (LF) even when edited on Windows.
+# Without this, bash in the Docker container will fail with "bad interpreter" error.
+entrypoint.sh text eol=lf
+*.sh text eol=lf

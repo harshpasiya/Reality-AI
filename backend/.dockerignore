@@ -1,0 +1,15 @@
+# Keep secrets and local artefacts out of the image (COPY . . in the Dockerfile)
+.env
+.env.*
+!.env.example
+.git
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.idea/
+.vscode/
+uploads/
+*.docx
+*.pdf

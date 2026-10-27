@@ -1,0 +1,81 @@
+services:
+  # PostgreSQL + PostGIS + pgvector
+  db:
+    build:
+      context: .
+      dockerfile: ./docker/postgres/Dockerfile
+    container_name: reality_ai_db
+    restart: always
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-reality_ai}
+
+    # Bound to localhost only — never publish the database on all interfaces.
+    ports:
+      - "127.0.0.1:5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./app/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-reality_ai}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # FastAPI backend
+  api:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: reality_ai_api
+    restart: on-failure
+
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-reality_ai}
+      # No default on purpose: startup fails unless SECRET_KEY is set in .env.
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env (at least 32 characters)}
+      PLACEHOLDER_MODE: ${PLACEHOLDER_MODE:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-reality_ai}
+
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    # Development only: live-reload the source from the host.
+    volumes:
+      - .:/app
+
+  # pgAdmin 4 — local database GUI
+  db_admin:
+    image: dpage/pgadmin4:8.14
+    container_name: reality_ai_pgadmin
+    restart: on-failure
+
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?PGADMIN_DEFAULT_EMAIL must be set in .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD must be set in .env}
+
+    ports:
+      - "127.0.0.1:5050:80"
+
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
