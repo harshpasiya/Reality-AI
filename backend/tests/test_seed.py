@@ -25,6 +25,7 @@ def test_jitter_stays_inside_gazetteer_radius():
             assert _distance_m((loc["lat"], loc["lng"]), point) <= loc["radius_m"], name
 
 
+@pytest.mark.ai_package
 def test_reference_data_matches_ai_gazetteer():
     """Once the ai/ package is importable, the copied centroids must still match."""
     gazetteer = pytest.importorskip("ai.nlu.gazetteer")

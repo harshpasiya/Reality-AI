@@ -10,11 +10,20 @@ Prerequisite: the Docker Postgres container must be running and Alembic
 migrations must have been applied (``alembic upgrade head``).
 """
 
+import os
 import sys
 import types
 import uuid
 
 import pytest
+
+# Tests never run the real AI: the 4B model needs the GPU and ~30 s to load,
+# and its background tasks open their own DB connections, which cannot see
+# rows inside the rolled-back test transaction.  PLACEHOLDER_MODE skips the
+# start-up warm-up (environment variables beat the .env files), and
+# ``_no_real_ai`` below makes ``import ai`` fail unless a test installs
+# ``fake_ai``.
+os.environ["PLACEHOLDER_MODE"] = "true"
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
@@ -26,6 +35,22 @@ from app.main import app
 
 engine = create_engine(sqlalchemy_url(settings.DATABASE_URL), pool_pre_ping=True)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "ai_package: the test may import lightweight ai/ modules (no model)"
+    )
+
+
+@pytest.fixture(autouse=True)
+def _no_real_ai(request, monkeypatch):
+    """Make the monorepo's ai/ package unimportable, as in a backend-only checkout."""
+    if request.node.get_closest_marker("ai_package"):
+        return
+    for name in [n for n in sys.modules if n == "ai" or n.startswith("ai.")]:
+        monkeypatch.setitem(sys.modules, name, None)
+    monkeypatch.setitem(sys.modules, "ai", None)
 
 
 @pytest.fixture()

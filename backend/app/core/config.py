@@ -2,17 +2,30 @@
 
 import os
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Monorepo layout: <repo>/backend/app/core/config.py.  The shared .env lives
+# at the repo root (the ai/ package reads it too); backend/.env, if present,
+# overrides it for backend-only settings.
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+REPO_ROOT = BACKEND_DIR.parent
+ENV_FILES = (REPO_ROOT / ".env", BACKEND_DIR / ".env")
+
+# The backend imports Person 1's ai/ package, which sits at the repo root.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
+
+
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables and .env file."""
+    """Application settings loaded from environment variables and .env files."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ENV_FILES,
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -36,11 +49,11 @@ class Settings(BaseSettings):
         ),
     )
     CORS_ORIGINS: str = Field(
-        default="http://localhost:5173",
-        description="Comma-separated list of allowed frontend origins (the Vite dev URL locally)",
+        default="http://localhost:3000",
+        description="Comma-separated list of allowed frontend origins (the Next.js dev URL locally)",
     )
     UPLOAD_DIR: str = Field(
-        default="uploads",
+        default=str(BACKEND_DIR / "uploads"),
         description="Directory where listing photos are stored and served from /uploads",
     )
 
@@ -92,5 +105,6 @@ except Exception as e:
 # and HF_TOKEN from os.environ, and raise RuntimeError at import when
 # DATABASE_URL is missing.  pydantic-settings reads .env without exporting
 # it, so export it here (never overriding real environment variables).
-load_dotenv(".env", override=False)
+for _env_file in reversed(ENV_FILES):  # backend/.env wins, as in Settings
+    load_dotenv(_env_file, override=False)
 os.environ.setdefault("DATABASE_URL", settings.DATABASE_URL)
