@@ -64,7 +64,7 @@ def test_all_categories_ok_are_cached(monkeypatch, engine) -> None:
     monkeypatch.setenv(svc._PLACES_API_KEY_ENV, KEY)
     monkeypatch.setattr(svc, "_fetch_category", lambda lat, lng, place_type, api_key: [])
     svc.fetch_and_cache(1)
-    assert len(engine.writes) == 1 and "UPDATE listings SET amenities" in engine.writes[0][0]
+    assert len(engine.writes) == 1 and "UPDATE listing SET amenities" in engine.writes[0][0]
 
 
 def test_api_key_is_redacted_from_logs(monkeypatch, caplog) -> None:

@@ -87,10 +87,11 @@ listings by `embedding <-> query_vector` (Euclidean distance between
 
 - **Price:** `price >= :min`, `price <= :max`.
 - **Property type:** `flat` or `house_land`.
-- **BHK:** bedroom count equality.
+- **BHK:** bedroom count equality on `(rooms->>'bedrooms')::int`.
+- **Status:** only `available` and `under_offer` listings are searchable.
 - **Locality:** the gazetteer (`ai/nlu/gazetteer.py`, 20 localities and 33
   landmarks with aliases) gives a centre point and radius (1.5–2.5 km); SQL
-  keeps listings within it using PostGIS `ST_DWithin` on geography (metres).
+  keeps listings within it using PostGIS `ST_DWithin` on `location::geography` (metres).
 - **Polygon:** `candidate_ids` from `get_candidates()` restrict the search.
 
 No vector index is used: at demo scale an exact scan is fast, and an
@@ -254,11 +255,11 @@ before the reply and the reply itself is instant. Machines without a GPU use
 - **Latency.** ~8 s per message on the RTX 3050 with Hugging Face
   `generate()`; a quantised llama.cpp runtime would be faster but changes the
   stack.
-- **Schema mapping at merge.** The AI code currently runs against a local
-  stand-in table (`listings` with `lat`, `lng` and `bhk` columns). At merge it
-  must switch to the backend's `listing` table (`location` geometry, bedrooms
-  inside `rooms` JSON). The required schema decisions are written up for the
-  backend track in "Reality AI — Database Schema Recommendations for Person 2".
+- **Schema.** The AI SQL targets the backend's `listing` table (`location`
+  PostGIS point, bedrooms inside `rooms` JSON, `status`); the shared SQL
+  fragments live in `ai/rag/listing_sql.py`. The local `db/init.sql` mirrors
+  the subset of that table the AI reads and writes, so a change to the
+  backend schema must be copied there too.
 - **Library versions.** The adapter was saved with transformers 5.x on
   Kaggle; the local transformers 4.57 cannot read its tokenizer config, so the
   loader falls back to the base model's identical tokenizer.

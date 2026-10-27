@@ -31,10 +31,10 @@ Exact scan, no vector index (see ``db/init.sql``): at a few hundred rows it
 is sub-millisecond, and approximate indexes apply WHERE filters after the
 index scan, which would silently drop filtered results.
 
-Merge-time note: the local test table is ``listings(lat, lng, bhk)``;
-Person 2's real table is ``listing`` with a PostGIS ``location`` column and
-bedrooms inside ``rooms`` JSON. The SQL in ``_build_sql`` needs a small
-adapter at merge.
+Schema
+~~~~~~
+Queries Person 2's ``listing`` table (see ``ai/rag/listing_sql.py``). Only
+available and under-offer listings are searchable.
 """
 
 from __future__ import annotations
@@ -53,6 +53,7 @@ from ai.embeddings.embedding_model import EmbeddingModel
 from ai.nlu.gazetteer import get_place
 from ai.nlu.query_parser import MAX_QUERY_CHARS, parse_query
 from ai.nlu.schema import ParsedQuery
+from ai.rag.listing_sql import BEDROOMS_SQL, LAT_SQL, LNG_SQL, VISIBLE_STATUS_SQL
 
 load_dotenv()
 
@@ -179,7 +180,7 @@ def relaxation_ladder(f: _Filters) -> list[tuple[str, _Filters]]:
 
 def _build_sql(f: _Filters, query_vector: list[float], top_k: int) -> tuple[str, dict[str, Any]]:
     """SQL + bound parameters for one attempt. Never interpolates values into SQL."""
-    where = ["embedding IS NOT NULL"]
+    where = ["embedding IS NOT NULL", VISIBLE_STATUS_SQL]
     params: dict[str, Any] = {"query_vector": str(query_vector), "top_k": top_k}
     if f.price_min is not None:
         where.append("price >= :price_min")
@@ -191,12 +192,12 @@ def _build_sql(f: _Filters, query_vector: list[float], top_k: int) -> tuple[str,
         where.append("property_type = :property_type")
         params["property_type"] = f.property_type
     if f.bhk is not None:
-        where.append("bhk = :bhk")
+        where.append(f"{BEDROOMS_SQL} = :bhk")
         params["bhk"] = f.bhk
     if f.radius_m is not None:
         where.append(
             "ST_DWithin("
-            "ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography, "
+            "location::geography, "
             "ST_SetSRID(ST_MakePoint(:loc_lng, :loc_lat), 4326)::geography, "
             ":radius_m)"
         )
@@ -206,9 +207,10 @@ def _build_sql(f: _Filters, query_vector: list[float], top_k: int) -> tuple[str,
         params["candidate_ids"] = list(f.candidate_ids)
 
     sql = (
-        "SELECT id, title, description, price, property_type, bhk, lat, lng, amenities, "
+        f"SELECT id, title, description, price, property_type, {BEDROOMS_SQL} AS bhk, "
+        f"{LAT_SQL} AS lat, {LNG_SQL} AS lng, amenities, "
         "embedding <-> :query_vector AS distance_score "
-        "FROM listings WHERE " + " AND ".join(where) +
+        "FROM listing WHERE " + " AND ".join(where) +
         " ORDER BY distance_score ASC LIMIT :top_k"
     )
     return sql, params

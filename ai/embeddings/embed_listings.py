@@ -151,7 +151,7 @@ def build_listing_text(listing: dict[str, Any]) -> str:
     makes re-embedded listings "amenity-aware" for semantic search.
 
     Args:
-        listing: A dict with keys matching the ``listings`` table columns:
+        listing: A dict with keys matching the ``listing`` table columns:
             ``title``, ``description``, ``price``, ``property_type``, and
             optionally ``amenities``.
 
@@ -233,7 +233,7 @@ def embed_single(listing_id: int) -> None:
         row = conn.execute(
             text(
                 "SELECT id, title, description, price, property_type, amenities "
-                "FROM listings WHERE id = :listing_id"
+                "FROM listing WHERE id = :listing_id"
             ),
             {"listing_id": listing_id},
         ).fetchone()
@@ -256,7 +256,7 @@ def embed_single(listing_id: int) -> None:
 
     with _engine.begin() as conn:
         conn.execute(
-            text("UPDATE listings SET embedding = :vec WHERE id = :listing_id"),
+            text("UPDATE listing SET embedding = :vec WHERE id = :listing_id"),
             {"vec": str(vector), "listing_id": listing_id},
         )
 
@@ -297,7 +297,7 @@ def run(batch_size: int = 50) -> int:
         with _engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT id FROM listings "
+                    "SELECT id FROM listing "
                     "WHERE embedding IS NULL AND id > :last_id "
                     "ORDER BY id "
                     "LIMIT :batch_size"

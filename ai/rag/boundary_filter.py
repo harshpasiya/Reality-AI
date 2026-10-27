@@ -17,6 +17,8 @@ import time
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from ai.rag.listing_sql import VISIBLE_STATUS_SQL
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -105,12 +107,12 @@ def get_candidates(polygon: list[list[float]]) -> list[int]:
     sql = text(
         """
         SELECT id
-        FROM listings
+        FROM listing
         WHERE ST_Contains(
             ST_MakeValid(ST_GeomFromText(:polygon_wkt, 4326)),
-            ST_SetSRID(ST_MakePoint(lng, lat), 4326)
+            location
         )
-        """
+        AND """ + VISIBLE_STATUS_SQL
     )
 
     t0 = time.time()

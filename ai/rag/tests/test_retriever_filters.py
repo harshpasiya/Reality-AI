@@ -84,7 +84,9 @@ def test_all_filters_become_bound_parameters(monkeypatch) -> None:
     results = retriever.search("3bhk flat in vesu between 60 lakh and 1 crore", candidate_ids=[1, 2, 3])
     sql, params = engine.calls[0]
     for clause in ("price >= :price_min", "price <= :price_max", "property_type = :property_type",
-                   "bhk = :bhk", "ST_DWithin(", "id = ANY(:candidate_ids)"):
+                   "(rooms->>'bedrooms')::int = :bhk", "ST_DWithin(location::geography,",
+                   "id = ANY(:candidate_ids)", "status IN ('available', 'under_offer')",
+                   "FROM listing WHERE"):
         assert clause in sql
     assert params["price_min"] == 60 * L and params["price_max"] == 100 * L
     assert params["property_type"] == "flat" and params["bhk"] == 3
@@ -98,7 +100,7 @@ def test_no_filters_is_plain_semantic_search(monkeypatch) -> None:
     engine = _install(monkeypatch, [[_row(1), _row(2)]])
     results = retriever.search("show me some properties")
     sql, params = engine.calls[0]
-    assert "WHERE embedding IS NOT NULL ORDER BY" in sql
+    assert "WHERE embedding IS NOT NULL AND status IN ('available', 'under_offer') ORDER BY" in sql
     assert [r["id"] for r in results] == [1, 2]
 
 
