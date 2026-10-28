@@ -21,6 +21,10 @@ export interface ChatMessageResponse {
   conversation_id: number;
   reply: string;
   listings: ChatListing[];
+  /** How many listings match in all (null when the AI runs in fallback mode). */
+  total?: number | null;
+  /** More matches exist: offer "Show more". */
+  has_more?: boolean;
 }
 
 export interface HistoricalMessage {
@@ -30,6 +34,7 @@ export interface HistoricalMessage {
   message: string;
   timestamp: string;
   listings?: ChatListing[];
+  has_more?: boolean;
   /** Set on a message that failed to send, so the UI can offer a retry. */
   failed?: boolean;
 }

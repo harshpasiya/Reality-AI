@@ -7,6 +7,7 @@ import { HistoricalMessage } from "@/lib/api/chat";
 type ChatMessagesProps = {
   messages: HistoricalMessage[];
   isSending?: boolean;
+  /** Sends a message: used for "Retry" and for "Show more". */
   onRetry?: (text: string) => void;
   hoveredListingId?: number | null;
   hoveredCardKey?: string | null;
@@ -125,6 +126,23 @@ export default function ChatArea({
             />
           );
         })}
+        {(() => {
+          const last = messages[messages.length - 1];
+          if (!last || last.sender !== "assistant" || !last.has_more)
+            return null;
+          return (
+            <div className="flex justify-start">
+              <button
+                type="button"
+                disabled={isSending}
+                onClick={() => onRetry?.("show more")}
+                className="border-accent text-accent hover:bg-accent rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors hover:text-white disabled:opacity-50"
+              >
+                Show more results
+              </button>
+            </div>
+          );
+        })()}
         {messages.length === 0 && !isSending && (
           <p className="text-text-muted py-10 text-center text-sm">
             Ask for a property, e.g. &ldquo;2 BHK in Vesu under 80 lakh&rdquo;.

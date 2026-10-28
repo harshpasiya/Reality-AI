@@ -147,7 +147,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Brand / Header Icon */}
         <div className="mb-8 text-center">
-          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/20">
+          <div className="bg-accent shadow-accent/20 mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg">
             <svg
               className="h-6 w-6"
               fill="none"
@@ -179,7 +179,12 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} noValidate className="space-y-5">
+          <form
+            method="post"
+            onSubmit={handleSubmit}
+            noValidate
+            className="space-y-5"
+          >
             {/* Email Field */}
             <div className="space-y-1.5">
               <label
@@ -201,7 +206,7 @@ export default function LoginPage() {
                   className={`w-full rounded-xl border bg-zinc-50/50 px-3.5 py-2.5 text-sm text-zinc-900 transition-colors outline-none placeholder:text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
                     errors.email
                       ? "border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 dark:border-red-500"
-                      : "border-zinc-300 hover:border-zinc-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 dark:border-zinc-700 dark:hover:border-zinc-600"
+                      : "focus:border-accent focus:ring-accent/10 border-zinc-300 hover:border-zinc-400 focus:ring-4 dark:border-zinc-700 dark:hover:border-zinc-600"
                   }`}
                   aria-invalid={Boolean(errors.email)}
                   aria-describedby={errors.email ? "email-error" : undefined}
@@ -251,7 +256,7 @@ export default function LoginPage() {
                   className={`w-full rounded-xl border bg-zinc-50/50 px-3.5 py-2.5 pr-10 text-sm text-zinc-900 transition-colors outline-none placeholder:text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
                     errors.password
                       ? "border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 dark:border-red-500"
-                      : "border-zinc-300 hover:border-zinc-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 dark:border-zinc-700 dark:hover:border-zinc-600"
+                      : "focus:border-accent focus:ring-accent/10 border-zinc-300 hover:border-zinc-400 focus:ring-4 dark:border-zinc-700 dark:hover:border-zinc-600"
                   }`}
                   aria-invalid={Boolean(errors.password)}
                   aria-describedby={
@@ -326,7 +331,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="flex w-full cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-blue-500/20 transition-all hover:bg-blue-700 focus:ring-4 focus:ring-blue-600/20 focus:outline-none active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="bg-accent shadow-accent/20 hover:bg-accent-hover focus:ring-accent/20 active:bg-accent-hover flex w-full cursor-pointer items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium text-white shadow-md transition-all focus:ring-4 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isLoading ? (
                 <span className="inline-flex items-center gap-2">
@@ -364,7 +369,7 @@ export default function LoginPage() {
               Don&apos;t have an account?{" "}
               <Link
                 href="/register"
-                className="ml-1 font-semibold text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                className="text-accent hover:text-accent-hover ml-1 font-semibold transition-colors hover:underline dark:text-emerald-400 dark:hover:text-emerald-300"
               >
                 Register
               </Link>

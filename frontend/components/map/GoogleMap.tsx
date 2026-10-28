@@ -129,16 +129,16 @@ export default function GoogleMap({
                 href={`/listings/${listing.id}`}
                 aria-label={`${listing.title}, ${formatPriceShort(listing.price)}`}
                 className={cn(
-                  "bg-accent relative block rounded-full border-2 border-white px-2.5 py-1 text-xs font-bold whitespace-nowrap text-white shadow-lg transition-transform duration-200",
-                  isHovered && "bg-accent-hover scale-110",
+                  "bg-ink relative block rounded-full border-2 border-white px-2.5 py-1 text-xs font-bold whitespace-nowrap text-white shadow-lg transition-transform duration-200",
+                  isHovered && "bg-accent scale-110",
                 )}
               >
                 {formatPriceShort(listing.price)}
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "bg-accent absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-r-2 border-b-2 border-white",
-                    isHovered && "bg-accent-hover",
+                    "bg-ink absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-r-2 border-b-2 border-white",
+                    isHovered && "bg-accent",
                   )}
                 />
               </Link>

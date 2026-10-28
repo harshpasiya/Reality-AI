@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Chat"])
 
 TOP_K = 5
+# Listings per reply when the conversation-aware chat (ai.rag.conversation) runs.
+PAGE_SIZE = 10
 
 
 class _NeverRaised(Exception):
@@ -100,6 +102,48 @@ def _search(db: Session, message: str, candidate_ids: list[int] | None) -> list[
         )
     except Exception:
         logger.exception("Unexpected error from AI search")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Search is temporarily unavailable",
+        )
+
+
+def _chat_turn(
+    message: str, history: list[dict], candidate_ids: list[int] | None
+) -> dict | None:
+    """Call ``ai.rag.conversation.chat_turn()``; None when that module isn't installed.
+
+    It remembers the search across messages ("cheaper", "what about Adajan?",
+    "show more").  Without it the route falls back to the single-message
+    ``search()`` + ``generate_response()`` pair.  Errors map like ``_search``.
+    """
+    if settings.PLACEHOLDER_MODE:
+        return None
+    try:
+        from ai.rag.conversation import chat_turn  # type: ignore[import-untyped]
+        from ai.rag import retriever  # type: ignore[import-untyped]
+    except ImportError:
+        return None
+    except Exception:
+        logger.exception("ai.rag.conversation failed to import")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Search is temporarily unavailable",
+        )
+
+    retrieval_error = getattr(retriever, "RetrievalError", _NeverRaised)
+    try:
+        return chat_turn(message, history, candidate_ids=candidate_ids, page_size=PAGE_SIZE)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except retrieval_error:
+        logger.exception("AI search failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Search is temporarily unavailable",
+        )
+    except Exception:
+        logger.exception("Unexpected error from AI chat")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Search is temporarily unavailable",
@@ -200,9 +244,14 @@ def chat(
             {k: m.get(k) for k in ("role", "content", "timestamp")}
             for m in conversation.messages or []
         ]
+        # The conversation-aware chat also reads the search state stored on replies.
+        memory = [
+            {k: m.get(k) for k in ("role", "content", "search")}
+            for m in conversation.messages or []
+        ]
         _append_message(conversation, user_msg)
     else:
-        history = []
+        history, memory = [], []
         conversation = Conversation(customer_id=current_user.id, messages=[user_msg])
         db.add(conversation)
     db.commit()
@@ -212,10 +261,15 @@ def chat(
     candidate_ids = (
         boundary_listing_ids(db, body.polygon) if body.polygon else None
     )
-    results = _search(db, body.message, candidate_ids)
-
-    # 5. Reply (off-topic messages: results == [] and a polite redirect)
-    reply_text = _generate_response(body.message, results, history)
+    turn = _chat_turn(body.message, memory, candidate_ids)
+    if turn is not None:
+        results, reply_text = turn["listings"], turn["reply"]
+        total, has_more, search_state = turn["total"], turn["has_more"], turn["search"]
+    else:
+        results = _search(db, body.message, candidate_ids)
+        # 5. Reply (off-topic messages: results == [] and a polite redirect)
+        reply_text = _generate_response(body.message, results, history)
+        total, has_more, search_state = None, False, None
 
     # Build API listings from the DB rows the results point to, in AI order;
     # sold / withdrawn listings are dropped even if the AI returned them.
@@ -245,6 +299,8 @@ def chat(
             "timestamp": _now_iso(),
             "listing_ids": [l.id for l in listings],
             "match_notes": [l.match_note for l in listings],
+            "has_more": has_more,
+            "search": search_state,
         },
     )
     listing_service.record_views(db, [l.id for l in listings])
@@ -254,6 +310,8 @@ def chat(
         conversation_id=conversation_id,
         reply=reply_text,
         listings=listings,
+        total=total,
+        has_more=has_more,
     )
 
 
@@ -349,6 +407,7 @@ def get_chat_history(
                 message=content,
                 timestamp=ts,
                 listings=msg_listings,
+                has_more=bool(msg.get("has_more")),
             )
         )
 

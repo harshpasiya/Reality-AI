@@ -166,3 +166,58 @@ class TestBrokenAIPackage:
         resp = client.post("/listings/search-boundary", json={"polygon": polygon})
         assert resp.status_code == 200
         assert listing_id in [l["id"] for l in resp.json()]
+
+
+class TestConversationMemory:
+    """With ai.rag.conversation installed, /chat passes the stored search back in."""
+
+    def _install(self, monkeypatch, fake_ai, ids):
+        import sys
+        import types
+
+        seen: list[list[dict]] = []
+
+        def chat_turn(message, history, candidate_ids=None, page_size=10):
+            seen.append(history)
+            prev = next((m.get("search") for m in reversed(history) if m["role"] == "assistant"), None)
+            shown = (prev or {}).get("shown_ids", [])
+            page = [i for i in ids if i not in shown][:2]
+            return {
+                "reply": f"page after {len(shown)}",
+                "listings": [{"id": i, "title": f"Flat {i}", "bhk": 2, "match_note": "exact"} for i in page],
+                "total": len(ids),
+                "has_more": len(shown) + len(page) < len(ids),
+                "search": {"filters": {"bhk": 2}, "shown_ids": shown + page},
+            }
+
+        mod = types.ModuleType("ai.rag.conversation")
+        mod.chat_turn = chat_turn
+        monkeypatch.setitem(sys.modules, "ai.rag.conversation", mod)
+        return seen
+
+    def test_show_more_gets_previous_search_and_pages(self, client, fake_ai, monkeypatch):
+        _, ids, token, _ = _setup(client, n_listings=3)
+        seen = self._install(monkeypatch, fake_ai, ids)
+
+        first = client.post("/chat", json={"message": "2 bhk"}, headers=auth_header(token)).json()
+        assert [l["id"] for l in first["listings"]] == ids[:2]
+        assert first["total"] == 3 and first["has_more"] is True
+
+        conv = first["conversation_id"]
+        more = client.post("/chat", json={"conversation_id": conv, "message": "show more"},
+                           headers=auth_header(token)).json()
+        assert [l["id"] for l in more["listings"]] == ids[2:]
+        assert more["has_more"] is False and more["reply"] == "page after 2"
+        assert seen[1][-1]["search"]["shown_ids"] == ids[:2]
+
+        history = client.get(f"/chat/{conv}", headers=auth_header(token)).json()
+        assert [m["has_more"] for m in history["messages"]] == [False, True, False, False]
+
+    def test_placeholder_mode_skips_the_ai(self, client, fake_ai, monkeypatch):
+        from app.core.config import settings
+
+        _, ids, token, _ = _setup(client, n_listings=1)
+        seen = self._install(monkeypatch, fake_ai, ids)
+        monkeypatch.setattr(settings, "PLACEHOLDER_MODE", True)
+        resp = client.post("/chat", json={"message": "2 bhk"}, headers=auth_header(token)).json()
+        assert seen == [] and resp["reply"].startswith("[PLACEHOLDER MODE]")

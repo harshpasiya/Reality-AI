@@ -184,7 +184,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         {/* Brand / Header Icon */}
         <div className="mb-8 text-center">
-          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/20">
+          <div className="bg-accent shadow-accent/20 mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg">
             <svg
               className="h-6 w-6"
               fill="none"
@@ -210,7 +210,12 @@ export default function RegisterPage() {
 
         {/* Card Container */}
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl shadow-zinc-200/50 backdrop-blur-sm sm:p-8 dark:border-zinc-800 dark:bg-zinc-900/90 dark:shadow-none">
-          <form onSubmit={handleSubmit} noValidate className="space-y-5">
+          <form
+            method="post"
+            onSubmit={handleSubmit}
+            noValidate
+            className="space-y-5"
+          >
             {/* Name Field */}
             <div className="space-y-1.5">
               <label
@@ -232,7 +237,7 @@ export default function RegisterPage() {
                   className={`w-full rounded-xl border bg-zinc-50/50 px-3.5 py-2.5 text-sm text-zinc-900 transition-colors outline-none placeholder:text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
                     errors.name
                       ? "border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 dark:border-red-500"
-                      : "border-zinc-300 hover:border-zinc-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 dark:border-zinc-700 dark:hover:border-zinc-600"
+                      : "focus:border-accent focus:ring-accent/10 border-zinc-300 hover:border-zinc-400 focus:ring-4 dark:border-zinc-700 dark:hover:border-zinc-600"
                   }`}
                   aria-invalid={Boolean(errors.name)}
                   aria-describedby={errors.name ? "name-error" : undefined}
@@ -280,7 +285,7 @@ export default function RegisterPage() {
                   className={`w-full rounded-xl border bg-zinc-50/50 px-3.5 py-2.5 text-sm text-zinc-900 transition-colors outline-none placeholder:text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
                     errors.email
                       ? "border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 dark:border-red-500"
-                      : "border-zinc-300 hover:border-zinc-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 dark:border-zinc-700 dark:hover:border-zinc-600"
+                      : "focus:border-accent focus:ring-accent/10 border-zinc-300 hover:border-zinc-400 focus:ring-4 dark:border-zinc-700 dark:hover:border-zinc-600"
                   }`}
                   aria-invalid={Boolean(errors.email)}
                   aria-describedby={errors.email ? "email-error" : undefined}
@@ -328,7 +333,7 @@ export default function RegisterPage() {
                   className={`w-full rounded-xl border bg-zinc-50/50 px-3.5 py-2.5 pr-10 text-sm text-zinc-900 transition-colors outline-none placeholder:text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
                     errors.password
                       ? "border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 dark:border-red-500"
-                      : "border-zinc-300 hover:border-zinc-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 dark:border-zinc-700 dark:hover:border-zinc-600"
+                      : "focus:border-accent focus:ring-accent/10 border-zinc-300 hover:border-zinc-400 focus:ring-4 dark:border-zinc-700 dark:hover:border-zinc-600"
                   }`}
                   aria-invalid={Boolean(errors.password)}
                   aria-describedby={
@@ -409,7 +414,7 @@ export default function RegisterPage() {
                   htmlFor="role-customer"
                   className={`relative flex cursor-pointer items-center rounded-xl border p-3.5 transition-all ${
                     formData.role === "customer"
-                      ? "border-blue-600 bg-blue-50/50 text-blue-900 ring-2 ring-blue-600/20 dark:bg-blue-950/20 dark:text-blue-100"
+                      ? "border-accent bg-accent-soft text-text-primary ring-accent/20 ring-2 dark:bg-emerald-950/20 dark:text-emerald-100"
                       : "border-zinc-200 bg-zinc-50/30 text-zinc-700 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-800/30 dark:text-zinc-300 dark:hover:border-zinc-700"
                   }`}
                 >
@@ -422,7 +427,7 @@ export default function RegisterPage() {
                       checked={formData.role === "customer"}
                       onChange={handleChange}
                       onBlur={handleBlur}
-                      className="h-4 w-4 cursor-pointer border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+                      className="text-accent focus:ring-accent h-4 w-4 cursor-pointer border-zinc-300 dark:border-zinc-600"
                     />
                     <span className="text-sm font-medium">Customer</span>
                   </div>
@@ -432,7 +437,7 @@ export default function RegisterPage() {
                   htmlFor="role-broker"
                   className={`relative flex cursor-pointer items-center rounded-xl border p-3.5 transition-all ${
                     formData.role === "broker"
-                      ? "border-blue-600 bg-blue-50/50 text-blue-900 ring-2 ring-blue-600/20 dark:bg-blue-950/20 dark:text-blue-100"
+                      ? "border-accent bg-accent-soft text-text-primary ring-accent/20 ring-2 dark:bg-emerald-950/20 dark:text-emerald-100"
                       : "border-zinc-200 bg-zinc-50/30 text-zinc-700 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-800/30 dark:text-zinc-300 dark:hover:border-zinc-700"
                   }`}
                 >
@@ -445,7 +450,7 @@ export default function RegisterPage() {
                       checked={formData.role === "broker"}
                       onChange={handleChange}
                       onBlur={handleBlur}
-                      className="h-4 w-4 cursor-pointer border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+                      className="text-accent focus:ring-accent h-4 w-4 cursor-pointer border-zinc-300 dark:border-zinc-600"
                     />
                     <span className="text-sm font-medium">Broker</span>
                   </div>
@@ -500,7 +505,7 @@ export default function RegisterPage() {
                   }
                   aria-invalid={!!errors.phone}
                   aria-describedby="phone-hint"
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                  className="focus:border-accent focus:ring-accent/10 w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 outline-none focus:ring-4 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
                 />
                 <p
                   id="phone-hint"
@@ -525,7 +530,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="flex w-full cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-blue-500/20 transition-all hover:bg-blue-700 focus:ring-4 focus:ring-blue-600/20 focus:outline-none active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="bg-accent shadow-accent/20 hover:bg-accent-hover focus:ring-accent/20 active:bg-accent-hover flex w-full cursor-pointer items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium text-white shadow-md transition-all focus:ring-4 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isLoading ? (
                 <span className="inline-flex items-center gap-2">
@@ -563,7 +568,7 @@ export default function RegisterPage() {
               Already have an account?{" "}
               <Link
                 href="/login"
-                className="ml-1 font-semibold text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                className="text-accent hover:text-accent-hover ml-1 font-semibold transition-colors hover:underline dark:text-emerald-400 dark:hover:text-emerald-300"
               >
                 Login
               </Link>

@@ -106,6 +106,7 @@ export default function ChatPage({ params }: ChatPageProps) {
             message: response.reply,
             timestamp: new Date().toISOString(),
             listings: response.listings,
+            has_more: response.has_more,
           },
         ]);
       } catch (error) {

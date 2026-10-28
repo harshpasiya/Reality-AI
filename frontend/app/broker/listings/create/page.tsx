@@ -240,7 +240,7 @@ const inputClass = (hasError: boolean) =>
   `w-full rounded-lg border bg-white px-3.5 py-2.5 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 dark:bg-zinc-900 dark:text-zinc-100 ${
     hasError
       ? "border-red-500 focus:ring-4 focus:ring-red-500/10"
-      : "border-zinc-300 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 dark:border-zinc-700"
+      : "border-zinc-300 focus:border-accent focus:ring-4 focus:ring-accent/10 dark:border-zinc-700"
   }`;
 
 type FieldProps = {
@@ -567,7 +567,7 @@ export default function BrokerCreateListingPage() {
           {!hasStartedForm && (
             <section className="space-y-5 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                <div className="bg-accent-soft text-accent rounded-lg p-2 dark:bg-emerald-950/50 dark:text-emerald-300">
                   <Sparkles className="h-5 w-5" aria-hidden="true" />
                 </div>
                 <div>
@@ -584,7 +584,7 @@ export default function BrokerCreateListingPage() {
                       setExtractionError(null);
                     }}
                     disabled={isExtracting}
-                    className="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
+                    className="text-accent hover:text-accent-hover mt-2 text-sm font-medium disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300"
                   >
                     Try an example
                   </button>
@@ -627,7 +627,7 @@ export default function BrokerCreateListingPage() {
                   type="button"
                   onClick={handleExtractDetails}
                   disabled={isExtracting}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="bg-accent hover:bg-accent-hover inline-flex shrink-0 items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isExtracting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -978,7 +978,7 @@ export default function BrokerCreateListingPage() {
                     event.currentTarget.value = "";
                     setSubmitError(null);
                   }}
-                  className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100 dark:text-zinc-400 dark:file:bg-blue-950/50 dark:file:text-blue-300"
+                  className="file:bg-accent-soft file:text-accent block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-emerald-100 dark:text-zinc-400 dark:file:bg-emerald-950/50 dark:file:text-emerald-300"
                 />
                 <p
                   className={`text-xs ${imageError ? "text-red-600" : "text-zinc-500"}`}
@@ -1042,7 +1042,7 @@ export default function BrokerCreateListingPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                className="bg-accent hover:bg-accent-hover inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium text-white disabled:opacity-60"
               >
                 {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
 

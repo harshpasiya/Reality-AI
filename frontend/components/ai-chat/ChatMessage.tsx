@@ -4,8 +4,8 @@ import ListingCard from "@/components/ai-chat/ListingCard";
 
 const BUBBLE_STYLES = {
   assistant:
-    "rounded-tl-md border border-slate-100 bg-[#F8FAFC] text-slate-800",
-  user: "rounded-tr-md bg-[#1E1E24] text-white",
+    "rounded-tl-md border border-slate-100 bg-surface-soft text-slate-800",
+  user: "rounded-tr-md bg-ink text-white",
 } as const;
 
 interface ChatMessageProps {

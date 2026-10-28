@@ -55,6 +55,12 @@ class ChatResponse(BaseModel):
         default_factory=list,
         description="Listings retrieved by RAG grounding, in the AI's ranking order",
     )
+    total: int | None = Field(
+        None, description="How many listings match this search in all (null in fallback mode)"
+    )
+    has_more: bool = Field(
+        False, description='More matches exist; the customer can say "show more"'
+    )
 
 
 class ChatMessageResponse(BaseModel):
@@ -67,6 +73,7 @@ class ChatMessageResponse(BaseModel):
         default_factory=list,
         description="Listings associated with this message (populated for assistant messages when available)",
     )
+    has_more: bool = Field(False, description="This reply had more matches to page through")
 
 
 class ChatHistoryResponse(BaseModel):

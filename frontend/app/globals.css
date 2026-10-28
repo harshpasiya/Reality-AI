@@ -4,31 +4,36 @@
   --font-sans: var(--font-manrope);
 
   /*
-   * Brand
+   * Brand: black, white and emerald.  Every pair below passes WCAG AA for
+   * normal text (accent on white 5.5:1, white on accent 5.5:1,
+   * muted on white 5.7:1).
    */
-  --color-accent: #6f63c8;
-  --color-accent-hover: #5f53b7;
-  --color-accent-soft: #f1effd;
-  --color-accent-border: #9b8df0;
+  --color-accent: #047857; /* emerald-700 */
+  --color-accent-hover: #065f46; /* emerald-800 */
+  --color-accent-soft: #ecfdf5; /* emerald-50 */
+  --color-accent-border: #10b981; /* emerald-500 */
+  --color-accent-disabled: #a7d7c5;
+  --color-ink: #0a0a0a; /* near-black: primary surfaces, user bubbles */
+  --color-ink-hover: #262626;
 
   /*
    * Text
    */
-  --color-text-primary: #252c38;
-  --color-text-secondary: #687385;
-  --color-text-muted: #8c96a5;
+  --color-text-primary: #0a0a0a;
+  --color-text-secondary: #404040;
+  --color-text-muted: #666666;
 
   /*
    * Surfaces
    */
   --color-surface: #ffffff;
-  --color-surface-soft: #f8f8fa;
+  --color-surface-soft: #f7f7f7;
 
   /*
    * Borders
    */
-  --color-border: #e7e9ee;
-  --color-border-subtle: #f0f1f4;
+  --color-border: #e5e5e5;
+  --color-border-subtle: #f0f0f0;
 }
 
 * {
@@ -45,7 +50,7 @@ body {
 
 body {
   background: #ffffff;
-  color: #252c38;
+  color: #0a0a0a;
   font-family: var(--font-manrope), Arial, Helvetica, sans-serif;
 }
 
@@ -79,4 +84,15 @@ body {
     0 24px 60px rgba(0, 0, 0, 0.28), 0 8px 24px rgba(0, 0, 0, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.7),
     inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+/* Keyboard focus is always visible, in the brand colour. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: #d1fae5;
+  color: #0a0a0a;
 }

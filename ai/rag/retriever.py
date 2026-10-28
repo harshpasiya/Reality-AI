@@ -178,10 +178,19 @@ def relaxation_ladder(f: _Filters) -> list[tuple[str, _Filters]]:
     return steps
 
 
-def _build_sql(f: _Filters, query_vector: list[float], top_k: int) -> tuple[str, dict[str, Any]]:
-    """SQL + bound parameters for one attempt. Never interpolates values into SQL."""
+# ORDER BY for each supported sort.  "relevance" ranks by embedding distance.
+ORDERS = {
+    "relevance": "distance_score ASC",
+    "newest": "created_at DESC, id DESC",
+    "price_asc": "price ASC, id ASC",
+    "price_desc": "price DESC, id DESC",
+}
+
+
+def _where(f: _Filters) -> tuple[list[str], dict[str, Any]]:
+    """WHERE clauses + bound parameters for *f*. Never interpolates values into SQL."""
     where = ["embedding IS NOT NULL", VISIBLE_STATUS_SQL]
-    params: dict[str, Any] = {"query_vector": str(query_vector), "top_k": top_k}
+    params: dict[str, Any] = {}
     if f.price_min is not None:
         where.append("price >= :price_min")
         params["price_min"] = f.price_min
@@ -205,15 +214,42 @@ def _build_sql(f: _Filters, query_vector: list[float], top_k: int) -> tuple[str,
     if f.candidate_ids is not None:
         where.append("id = ANY(:candidate_ids)")
         params["candidate_ids"] = list(f.candidate_ids)
+    return where, params
+
+
+def _build_sql(
+    f: _Filters,
+    query_vector: list[float],
+    top_k: int,
+    *,
+    exclude_ids: list[int] | None = None,
+    order: str = "relevance",
+) -> tuple[str, dict[str, Any]]:
+    """SQL + bound parameters for one attempt. Never interpolates values into SQL.
+
+    *exclude_ids* skips listings already shown (for "show more"); *order* is a
+    key of ``ORDERS``.
+    """
+    where, params = _where(f)
+    params.update(query_vector=str(query_vector), top_k=top_k)
+    if exclude_ids:
+        where.append("NOT (id = ANY(:exclude_ids))")
+        params["exclude_ids"] = list(exclude_ids)
 
     sql = (
         f"SELECT id, title, description, price, property_type, {BEDROOMS_SQL} AS bhk, "
         f"{LAT_SQL} AS lat, {LNG_SQL} AS lng, amenities, "
         "embedding <-> :query_vector AS distance_score "
         "FROM listing WHERE " + " AND ".join(where) +
-        " ORDER BY distance_score ASC LIMIT :top_k"
+        f" ORDER BY {ORDERS[order]} LIMIT :top_k"
     )
     return sql, params
+
+
+def _build_count_sql(f: _Filters) -> tuple[str, dict[str, Any]]:
+    """How many listings match *f* in total (ignores paging)."""
+    where, params = _where(f)
+    return "SELECT count(*) FROM listing WHERE " + " AND ".join(where), params
 
 
 def _row_to_dict(row: Any, match_note: str) -> dict[str, Any]:
@@ -230,6 +266,82 @@ def _row_to_dict(row: Any, match_note: str) -> dict[str, Any]:
         "distance_score": float(row.distance_score),
         "match_note": match_note,
     }
+
+
+@dataclass(frozen=True)
+class SearchPage:
+    """One page of results for already-parsed filters (used by conversations)."""
+
+    listings: list[dict[str, Any]]
+    total: int          # matching listings at the ladder step that answered
+    match_note: str | None
+
+
+def search_parsed(
+    parsed: ParsedQuery,
+    embed_text: str,
+    *,
+    candidate_ids: list[int] | None = None,
+    page_size: int = 10,
+    exclude_ids: list[int] | None = None,
+    order: str = "relevance",
+) -> SearchPage:
+    """Run the filtered search for an already-resolved ParsedQuery.
+
+    Like ``search()``, but the caller supplies the filters (e.g. merged with
+    earlier messages in a conversation) and the text to rank by, can skip
+    listings already shown, choose the sort order, and gets the total count.
+
+    Raises:
+        ValueError: On an unknown *order*.
+        RetrievalError: If embedding or the database query fails.
+    """
+    if order not in ORDERS:
+        raise ValueError(f"order must be one of {sorted(ORDERS)}, got {order!r}.")
+    page_size = max(1, min(int(page_size), _MAX_TOP_K))
+    if candidate_ids is not None and len(candidate_ids) == 0:
+        return SearchPage([], 0, None)
+
+    try:
+        query_vector = _embedding_model.embed((embed_text or "property")[:MAX_QUERY_CHARS])
+    except Exception as exc:
+        logger.error("Query embedding failed. text=%r, error=%s", embed_text[:80], exc)
+        raise RetrievalError(f"Embedding the query failed: {exc}") from exc
+
+    filters = filters_from_parsed(parsed, candidate_ids)
+    try:
+        with _engine.connect() as conn:
+            for match_note, attempt in relaxation_ladder(filters):
+                count_sql, count_params = _build_count_sql(attempt)
+                total = int(conn.execute(text(count_sql), count_params).scalar() or 0)
+                if total == 0:
+                    continue
+                sql, params = _build_sql(attempt, query_vector, page_size,
+                                         exclude_ids=exclude_ids, order=order)
+                rows = conn.execute(text(sql), params).fetchall()
+                logger.info("search_parsed(): [%s] filters: %s -> %d total, %d on this page, "
+                            "match_note=%s, order=%s", parsed.describe(), attempt.describe(),
+                            total, len(rows), match_note, order)
+                return SearchPage([_row_to_dict(row, match_note) for row in rows], total, match_note)
+    except SQLAlchemyError as exc:
+        logger.error("Retrieval query failed. filters=%s, error=%s", filters.describe(), exc)
+        raise RetrievalError(f"Database query failed during search: {exc}") from exc
+
+    return SearchPage([], 0, None)
+
+
+def listing_prices(listing_ids: list[int]) -> list[float]:
+    """Prices of the given listings (any status), for relative follow-ups like "cheaper"."""
+    ids = [int(i) for i in listing_ids if isinstance(i, numbers.Integral) and not isinstance(i, bool)]
+    if not ids:
+        return []
+    try:
+        with _engine.connect() as conn:
+            rows = conn.execute(text("SELECT price FROM listing WHERE id = ANY(:ids)"),
+                                {"ids": ids}).fetchall()
+    except SQLAlchemyError as exc:
+        raise RetrievalError(f"Database query failed: {exc}") from exc
+    return [float(r[0]) for r in rows if r[0] is not None]
 
 
 # ---------------------------------------------------------------------------

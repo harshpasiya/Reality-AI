@@ -24,7 +24,7 @@ export default function ChatHeader({ isCollapsed, onToggle }: ChatHeaderProps) {
           isCollapsed && "lg:opacity-0",
         )}
       >
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1E1E24] text-white">
+        <div className="bg-ink flex h-9 w-9 items-center justify-center rounded-full text-white">
           <Bot className="h-5 w-5" />
         </div>
 

@@ -45,7 +45,7 @@ export default function ListingCard({
       className={cn(
         "group block flex cursor-pointer flex-col gap-2 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs transition-all duration-200 hover:border-slate-300 hover:shadow-md",
         isHovered &&
-          "border-accent-border bg-accent-soft ring-accent/20 shadow-[0_10px_25px_rgba(111,99,200,0.12)] ring-2",
+          "border-accent-border bg-accent-soft ring-accent/20 shadow-[0_10px_25px_rgba(4,120,87,0.12)] ring-2",
       )}
     >
       <div className="relative">
