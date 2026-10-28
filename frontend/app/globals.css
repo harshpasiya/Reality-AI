@@ -96,3 +96,17 @@ body {
   background: #d1fae5;
   color: #0a0a0a;
 }
+
+/*
+ * Monochrome map.  Google only applies JSON map styles to maps without a Map
+ * ID, and the price markers need one, so the base map is greyed here instead:
+ * the filter hits the map imagery (vector maps draw on a <canvas>, raster
+ * maps use <img> tiles) while the markers, which are ordinary HTML, keep
+ * their black and emerald.  For a fully custom style, create a cloud map
+ * style in Google Cloud and set NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID.
+ */
+.map-mono .gm-style canvas,
+.map-mono .gm-style img[src*="googleapis.com"],
+.map-mono .gm-style img[src*="gstatic.com"] {
+  filter: grayscale(1) contrast(1.08) brightness(1.03);
+}

@@ -39,6 +39,18 @@ async def lifespan(_app: FastAPI):
             logger.warning("ai.nlu.query_parser not available — skipping model warm-up")
         except Exception:  # noqa: BLE001 — warm-up must never stop the API starting
             logger.exception("AI model warm-up failed")
+
+        # Say which chat path /chat will take, so an old checkout or a broken
+        # import is visible at startup instead of as "the chat forgets".
+        try:
+            import ai.rag.conversation  # type: ignore[import-untyped]  # noqa: F401
+
+            logger.info("Chat mode: conversation memory ON (follow-ups, show more, totals)")
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Chat mode: single-message search; ai.rag.conversation failed to import",
+                exc_info=True,
+            )
     yield
 
 

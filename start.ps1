@@ -41,6 +41,24 @@ if (-not (Test-Path (Join-Path $root "frontend\.env.local"))) {
     Write-Host "Created frontend\.env.local from the example (add a Google Maps key there for the map)."
 }
 
+# ── Stop servers left over from an earlier run ───────────────────────────
+# An old backend still holding port 8000 keeps answering with old code while
+# the new one fails to start, so clear our own leftovers first.  Anything
+# else on these ports is reported, never killed.
+foreach ($port in 8000, 3000) {
+    $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+    foreach ($procId in ($listeners.OwningProcess | Sort-Object -Unique)) {
+        $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId=$procId").CommandLine
+        $ours = $cmd -and ($cmd -match "app\.main:app" -or ($cmd -match "next" -and $cmd -match [regex]::Escape($root)))
+        if ($ours) {
+            Write-Host "Stopping the previous Reality AI server on port $port (PID $procId)."
+            Stop-Process -Id $procId -Force
+        } else {
+            throw "Port $port is used by another program (PID $procId): $cmd. Close it and run again."
+        }
+    }
+}
+
 # ── Database ─────────────────────────────────────────────────────────────
 Step "Starting the database"
 docker compose -f (Join-Path $root "docker-compose.yml") up -d --wait

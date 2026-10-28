@@ -105,7 +105,8 @@ export default function GoogleMap({
         defaultZoom={DEFAULT_ZOOM}
         gestureHandling="greedy"
         disableDefaultUI
-        className="h-full w-full"
+        // Monochrome base map (see .map-mono in globals.css); markers keep colour.
+        className="map-mono h-full w-full"
       >
         <FitToListings points={points} />
 
